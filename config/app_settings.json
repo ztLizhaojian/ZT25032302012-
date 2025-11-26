@@ -1,0 +1,38 @@
+{
+  "app": {
+    "app_name": "企业财务账目录入与利润核算系统",
+    "version": "1.0.0",
+    "language": "zh_CN",
+    "theme": "light",
+    "auto_backup": true,
+    "backup_interval": 7,
+    "last_backup": null,
+    "auto_update": false
+  },
+  "database": {
+    "backup_path": "c:\\Users\\Administrator.DESKTOP-4SQD351\\Desktop\\期末作业\\backups",
+    "max_backups": 10,
+    "optimize_frequency": 30
+  },
+  "interface": {
+    "show_toolbar": true,
+    "show_statusbar": true,
+    "default_view": "dashboard",
+    "recent_files_limit": 10,
+    "font_size": 12
+  },
+  "finance": {
+    "currency_symbol": "¥",
+    "decimal_places": 2,
+    "default_account_id": null,
+    "tax_rate": 0.13,
+    "financial_year_start": "01-01"
+  },
+  "security": {
+    "session_timeout": 30,
+    "password_min_length": 6,
+    "require_strong_password": false,
+    "login_attempts_limit": 5,
+    "account_lock_duration": 30
+  }
+}

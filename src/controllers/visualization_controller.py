@@ -25,7 +25,7 @@ except ImportError as e:
 
 # 导入模型
 try:
-    from src.models.transaction import transaction_model
+    from src.models.transaction import TransactionModel
     from src.models.report import report_model
     from src.models.category import category_model
     from src.models.account import account_model
@@ -38,7 +38,7 @@ except ImportError as e:
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                     handlers=[
-                        logging.FileHandler(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'logs', 'visualization.log'),
+                        logging.FileHandler(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'logs', 'visualization.log')),
                         logging.StreamHandler()
                     ])
 logger = logging.getLogger("VisualizationController")
@@ -54,7 +54,7 @@ class VisualizationController:
         """
         初始化数据可视化控制器
         """
-        self.transaction_model = transaction_model if MODELS_READY else None
+        self.transaction_model = TransactionModel if MODELS_READY else None
         self.report_model = report_model if MODELS_READY else None
         self.category_model = category_model if MODELS_READY else None
         self.account_model = account_model if MODELS_READY else None

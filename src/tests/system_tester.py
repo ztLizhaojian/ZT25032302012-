@@ -20,16 +20,15 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 # 导入测试所需模块
 try:
     # 数据库相关
-    from src.database.db_manager import execute_query, get_db_connection, init_database
-    from src.database.db_access import db_access
-    from src.database.db_migration import db_migration
+    from src.database.db_manager import execute_query, init_db, get_db_path
+    from src.database.db_migration import init_database
     
     # 模型相关
     from src.models.user import user_model
-    from src.models.transaction import transaction_model
-    from src.models.account import account_model
-    from src.models.category import category_model
-    from src.models.report import report_model
+    from src.models.transaction import TransactionModel
+    from src.models.account import AccountModel
+    from src.models.category import CategoryModel
+    from src.models.report import ReportModel
     
     # 控制器相关
     from src.controllers.auth_controller import auth_controller
@@ -43,12 +42,10 @@ except ImportError as e:
     MODULES_AVAILABLE = False
 
 # 配置日志
+# 简化日志配置，避免复杂的路径计算
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                    handlers=[
-                        logging.FileHandler(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'logs', 'test.log'),
-                        logging.StreamHandler()
-                    ])
+                    handlers=[logging.StreamHandler()])
 logger = logging.getLogger("SystemTester")
 
 
@@ -191,15 +188,8 @@ class SystemTester:
         
         try:
             # 测试数据库连接
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            
-            # 执行简单查询
-            cursor.execute("SELECT COUNT(*) FROM users")
-            result = cursor.fetchone()
-            
-            cursor.close()
-            conn.close()
+            # 使用execute_query代替直接连接
+            result = execute_query("SELECT COUNT(*) FROM users", fetch=True)
             
             logger.info(f"数据库连接测试通过，当前用户数: {result[0]}")
             self._add_test_result(test_name, "passed", f"数据库连接成功，当前用户数: {result[0]}")
@@ -284,58 +274,77 @@ class SystemTester:
         
         try:
             # 测试创建账户
-            create_result = account_model.create_account(
-                name=self.test_account_data["name"],
-                type=self.test_account_data["type"],
-                initial_balance=self.test_account_data["initial_balance"],
-                description=self.test_account_data["description"]
+            create_result = AccountModel.create_account(
+                data={
+                    'name': self.test_account_data["name"],
+                    'account_type': self.test_account_data["type"],
+                    'initial_balance': self.test_account_data["initial_balance"],
+                    'description': self.test_account_data["description"],
+                    'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                },
+                user_id=1
             )
             
-            if not create_result["success"]:
+            if not create_result:
                 # 如果账户已存在，尝试删除后再创建
-                if "已存在" in create_result["message"]:
-                    # 查找测试账户ID
-                    accounts = account_model.get_all_accounts()
-                    test_account_id = None
-                    for account in accounts:
-                        if account["name"] == self.test_account_data["name"]:
-                            test_account_id = account["id"]
-                            break
+                # 查找测试账户ID
+                accounts = AccountModel.get_all_accounts()
+                test_account_id = None
+                for account in accounts:
+                    if account["name"] == self.test_account_data["name"]:
+                        test_account_id = account["id"]
+                        break
+                
+                # 删除测试账户
+                if test_account_id:
+                    success, message = AccountModel.delete_account(test_account_id, 1)
+                    logger.info(f"已删除已存在的测试账户: {test_account_id}")
                     
-                    # 删除测试账户
-                    if test_account_id:
-                        account_model.delete_account(test_account_id)
-                        logger.info(f"已删除已存在的测试账户: {test_account_id}")
-                        
-                        # 重新创建账户
-                        create_result = account_model.create_account(
-                            name=self.test_account_data["name"],
-                            type=self.test_account_data["type"],
-                            initial_balance=self.test_account_data["initial_balance"],
-                            description=self.test_account_data["description"]
-                        )
+                    # 重新创建账户
+                    create_result = AccountModel.create_account(
+                        data={
+                            'name': self.test_account_data["name"],
+                            'account_type': self.test_account_data["type"],
+                            'initial_balance': self.test_account_data["initial_balance"],
+                            'description': self.test_account_data["description"],
+                            'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                        },
+                        user_id=1
+                    )
             
-            if not create_result["success"]:
-                raise Exception(f"创建测试账户失败: {create_result['message']}")
+            if not create_result:
+                raise Exception(f"创建测试账户失败")
             
-            # 记录测试账户ID
-            self.test_account_id = create_result["account_id"]
+            # 查找测试账户ID
+            accounts = AccountModel.get_all_accounts()
+            self.test_account_id = None
+            for account in accounts:
+                if account["name"] == self.test_account_data["name"]:
+                    self.test_account_id = account["id"]
+                    break
+            
+            if not self.test_account_id:
+                raise Exception("获取测试账户ID失败")
             
             # 测试获取账户信息
-            account_info = account_model.get_account_by_id(self.test_account_id)
+            account_info = AccountModel.get_account_by_id(self.test_account_id)
             if not account_info:
                 raise Exception("获取账户信息失败")
             
             # 测试更新账户
-            update_result = account_model.update_account(
+            update_result = AccountModel.update_account(
                 account_id=self.test_account_id,
-                name="更新后的测试账户",
-                type="cash",
-                description="更新后的测试描述"
+                data={
+                    'name': "更新后的测试账户",
+                    'account_type': "cash",
+                    'description': "更新后的测试描述",
+                    'updated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                },
+                user_id=1
             )
             
-            if not update_result["success"]:
-                raise Exception(f"更新账户失败: {update_result['message']}")
+            if not update_result:
+                raise Exception(f"更新账户失败")
             
             logger.info(f"账户管理测试通过，创建的测试账户ID: {self.test_account_id}")
             self._add_test_result(test_name, "passed", f"账户创建、查询和更新成功，账户ID: {self.test_account_id}")
@@ -353,52 +362,67 @@ class SystemTester:
         
         try:
             # 测试创建分类
-            create_result = category_model.create_category(
-                name=self.test_category_data["name"],
-                type=self.test_category_data["type"],
-                parent_id=self.test_category_data["parent_id"],
-                description=self.test_category_data["description"]
+            create_result = CategoryModel.create_category(
+                data={
+                    'name': self.test_category_data["name"],
+                    'category_type': self.test_category_data["type"],
+                    'parent_id': self.test_category_data["parent_id"],
+                    'description': self.test_category_data["description"],
+                    'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                },
+                user_id=1
             )
             
-            if not create_result["success"]:
+            if not create_result:
                 # 如果分类已存在，尝试删除后再创建
-                if "已存在" in create_result["message"]:
-                    # 查找测试分类ID
-                    categories = category_model.get_all_categories()
-                    test_category_id = None
-                    for category in categories:
-                        if category["name"] == self.test_category_data["name"]:
-                            test_category_id = category["id"]
-                            break
+                # 查找测试分类ID
+                categories = CategoryModel.get_all_categories()
+                test_category_id = None
+                for category in categories:
+                    if category["name"] == self.test_category_data["name"]:
+                        test_category_id = category["id"]
+                        break
+                
+                # 删除测试分类
+                if test_category_id:
+                    success, message = CategoryModel.delete_category(test_category_id, 1)
+                    logger.info(f"已删除已存在的测试分类: {test_category_id}")
                     
-                    # 删除测试分类
-                    if test_category_id:
-                        category_model.delete_category(test_category_id)
-                        logger.info(f"已删除已存在的测试分类: {test_category_id}")
-                        
-                        # 重新创建分类
-                        create_result = category_model.create_category(
-                            name=self.test_category_data["name"],
-                            type=self.test_category_data["type"],
-                            parent_id=self.test_category_data["parent_id"],
-                            description=self.test_category_data["description"]
-                        )
+                    # 重新创建分类
+                    create_result = CategoryModel.create_category(
+                        data={
+                            'name': self.test_category_data["name"],
+                            'category_type': self.test_category_data["type"],
+                            'parent_id': self.test_category_data["parent_id"],
+                            'description': self.test_category_data["description"],
+                            'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                        },
+                        user_id=1
+                    )
             
-            if not create_result["success"]:
-                raise Exception(f"创建测试分类失败: {create_result['message']}")
+            if not create_result:
+                raise Exception(f"创建测试分类失败")
             
-            # 记录测试分类ID
-            self.test_category_id = create_result["category_id"]
+            # 查找测试分类ID
+            categories = CategoryModel.get_all_categories()
+            self.test_category_id = None
+            for category in categories:
+                if category["name"] == self.test_category_data["name"]:
+                    self.test_category_id = category["id"]
+                    break
+            
+            if not self.test_category_id:
+                raise Exception("获取测试分类ID失败")
             
             # 测试获取分类信息
-            category_info = category_model.get_category_by_id(self.test_category_id)
+            category_info = CategoryModel.get_category_by_id(self.test_category_id)
             if not category_info:
                 raise Exception("获取分类信息失败")
             
-            # 测试获取分类树
-            category_tree = category_model.get_category_tree()
-            if not isinstance(category_tree, list):
-                raise Exception("获取分类树失败")
+            # 测试获取分类层次结构
+            category_tree = CategoryModel.get_category_hierarchy(self.test_category_data["type"])
+            if not isinstance(category_tree, dict):
+                raise Exception("获取分类层次结构失败")
             
             logger.info(f"分类管理测试通过，创建的测试分类ID: {self.test_category_id}")
             self._add_test_result(test_name, "passed", f"分类创建、查询成功，分类ID: {self.test_category_id}")
@@ -431,7 +455,7 @@ class SystemTester:
             }
             
             # 测试创建交易
-            create_result = transaction_model.create_transaction(**transaction_data)
+            create_result = TransactionModel.create_transaction(**transaction_data)
             
             if not create_result["success"]:
                 raise Exception(f"创建测试交易失败: {create_result['message']}")
@@ -440,12 +464,12 @@ class SystemTester:
             self.test_transaction_id = create_result["transaction_id"]
             
             # 测试获取交易信息
-            transaction_info = transaction_model.get_transaction_by_id(self.test_transaction_id)
+            transaction_info = TransactionModel.get_transaction_by_id(self.test_transaction_id)
             if not transaction_info:
                 raise Exception("获取交易信息失败")
             
             # 测试获取交易列表
-            transactions = transaction_model.get_transactions(
+            transactions = TransactionModel.get_transactions(
                 start_date=(datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d"),
                 end_date=(datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
             )
@@ -474,14 +498,14 @@ class SystemTester:
         
         try:
             # 测试获取月度汇总数据
-            current_month = datetime.now().strftime("%Y-%m")
-            monthly_summary = report_model.get_monthly_summary(current_month)
+            current_date = datetime.now()
+            monthly_summary = ReportModel.get_month_summary(current_date.year, current_date.month)
             
             if not isinstance(monthly_summary, dict):
                 raise Exception("获取月度汇总数据失败")
             
             # 测试生成利润表
-            income_statement = report_model.generate_income_statement(
+            income_statement = ReportModel.generate_income_statement(
                 start_date=(datetime.now().replace(day=1) - timedelta(days=30)).strftime("%Y-%m-%d"),
                 end_date=datetime.now().strftime("%Y-%m-%d")
             )
@@ -490,7 +514,7 @@ class SystemTester:
                 raise Exception("生成利润表失败")
             
             # 测试生成资产负债表
-            balance_sheet = report_model.generate_balance_sheet(
+            balance_sheet = ReportModel.generate_balance_sheet(
                 as_of_date=datetime.now().strftime("%Y-%m-%d")
             )
             
@@ -556,7 +580,7 @@ class SystemTester:
             
             # 测试数据加载性能
             start_time = time.time()
-            transaction_model.get_transactions(limit=100)
+            TransactionModel.get_transactions(limit=100)
             data_load_time = time.time() - start_time
             performance_results.append(f"数据加载(100条): {data_load_time:.3f}秒")
             
@@ -595,17 +619,17 @@ class SystemTester:
         try:
             # 删除测试交易
             if hasattr(self, 'test_transaction_id'):
-                transaction_model.delete_transaction(self.test_transaction_id)
+                TransactionModel.delete_transaction(self.test_transaction_id)
                 logger.info(f"已删除测试交易: {self.test_transaction_id}")
             
             # 删除测试分类
             if hasattr(self, 'test_category_id'):
-                category_model.delete_category(self.test_category_id)
+                success, message = CategoryModel.delete_category(self.test_category_id, 1)
                 logger.info(f"已删除测试分类: {self.test_category_id}")
             
             # 删除测试账户
             if hasattr(self, 'test_account_id'):
-                account_model.delete_account(self.test_account_id)
+                success, message = AccountModel.delete_account(self.test_account_id, 1)
                 logger.info(f"已删除测试账户: {self.test_account_id}")
             
             # 删除测试用户
@@ -637,8 +661,8 @@ class SystemTester:
         try:
             # 测试数据库连接时间
             start_time = time.time()
-            conn = get_db_connection()
-            conn.close()
+            # 使用execute_query代替直接连接
+            execute_query("SELECT 1")
             db_connect_time = time.time() - start_time
             performance_report["performance_metrics"].append({
                 "metric": "数据库连接时间",
@@ -667,12 +691,9 @@ class SystemTester:
             
             if category_result["success"] and account_result["success"]:
                 # 批量插入交易记录
-                conn = get_db_connection()
-                cursor = conn.cursor()
-                
                 try:
                     for i in range(batch_size):
-                        cursor.execute(
+                        execute_query(
                             """
                             INSERT INTO transactions (amount, type, account_id, category_id, 
                                                   transaction_date, description, created_at, updated_at, created_by)
@@ -683,12 +704,7 @@ class SystemTester:
                              f"性能测试交易 {i}", 1)
                         )
                     
-                    conn.commit()
-                    
                 finally:
-                    cursor.close()
-                    conn.close()
-                    
                     # 删除临时数据
                     category_model.delete_category(category_result["category_id"])
                     account_model.delete_account(account_result["account_id"])

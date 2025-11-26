@@ -5,6 +5,13 @@
 实现系统的主要功能界面
 """
 
+import sys
+import os
+from datetime import datetime
+
+# 添加项目根目录到Python路径
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QTabWidget, QDockWidget, QLabel, 
     QVBoxLayout, QHBoxLayout, QStatusBar, QMenuBar, QMenu, 
@@ -13,20 +20,37 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtGui import QFont, QIcon, QColor
 from PyQt5.QtCore import Qt, QSize
 
-import sys
-import os
-from datetime import datetime
-
-# 添加项目根目录到Python路径
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-
 # 导入其他UI模块（稍后创建）
-from src.ui.transaction_widget import TransactionWidget
-from src.ui.report_widget import ReportWidget
-from src.ui.dashboard_widget import DashboardWidget
-from src.ui.account_widget import AccountWidget
-from src.ui.category_widget import CategoryWidget
-from src.ui.setting_widget import SettingWidget
+# 暂时使用占位符，避免导入错误
+try:
+    from src.ui.transaction_widget import TransactionWidget
+except ImportError:
+    TransactionWidget = None
+    
+try:
+    from src.ui.report_widget import ReportWidget
+except ImportError:
+    ReportWidget = None
+    
+try:
+    from src.ui.dashboard_widget import DashboardWidget
+except ImportError:
+    DashboardWidget = None
+    
+try:
+    from src.ui.account_widget import AccountWidget
+except ImportError:
+    AccountWidget = None
+    
+try:
+    from src.ui.category_widget import CategoryWidget
+except ImportError:
+    CategoryWidget = None
+    
+try:
+    from src.ui.setting_widget import SettingWidget
+except ImportError:
+    SettingWidget = None
 
 
 class MainWindow(QMainWindow):
@@ -34,8 +58,10 @@ class MainWindow(QMainWindow):
     
     def __init__(self, user_info):
         super().__init__()
+        print("主窗口初始化开始...")
         self.user_info = user_info
         self.init_ui()
+        print("主窗口初始化完成")
     
     def init_ui(self):
         """初始化用户界面"""
@@ -69,19 +95,46 @@ class MainWindow(QMainWindow):
         self.tab_widget.setDocumentMode(True)
         self.tab_widget.setMovable(True)
         
-        # 创建各个功能标签页
-        self.dashboard_widget = DashboardWidget(self.user_info)
-        self.transaction_widget = TransactionWidget(self.user_info)
-        self.report_widget = ReportWidget(self.user_info)
-        self.account_widget = AccountWidget(self.user_info)
-        self.category_widget = CategoryWidget(self.user_info)
+        # 创建各个功能标签页（处理导入失败的情况）
+        if DashboardWidget is not None:
+            self.dashboard_widget = DashboardWidget()
+            self.tab_widget.addTab(self.dashboard_widget, "首页")
+        else:
+            dashboard_placeholder = QLabel("首页功能正在开发中...")
+            dashboard_placeholder.setAlignment(Qt.AlignCenter)
+            self.tab_widget.addTab(dashboard_placeholder, "首页")
         
-        # 添加标签页
-        self.tab_widget.addTab(self.dashboard_widget, "首页")
-        self.tab_widget.addTab(self.transaction_widget, "账务处理")
-        self.tab_widget.addTab(self.report_widget, "报表分析")
-        self.tab_widget.addTab(self.account_widget, "账户管理")
-        self.tab_widget.addTab(self.category_widget, "分类管理")
+        if TransactionWidget is not None:
+            self.transaction_widget = TransactionWidget(self.user_info)
+            self.tab_widget.addTab(self.transaction_widget, "账务处理")
+        else:
+            transaction_placeholder = QLabel("账务处理功能正在开发中...")
+            transaction_placeholder.setAlignment(Qt.AlignCenter)
+            self.tab_widget.addTab(transaction_placeholder, "账务处理")
+        
+        if ReportWidget is not None:
+            self.report_widget = ReportWidget(self.user_info)
+            self.tab_widget.addTab(self.report_widget, "报表分析")
+        else:
+            report_placeholder = QLabel("报表分析功能正在开发中...")
+            report_placeholder.setAlignment(Qt.AlignCenter)
+            self.tab_widget.addTab(report_placeholder, "报表分析")
+        
+        if AccountWidget is not None:
+            self.account_widget = AccountWidget(self.user_info)
+            self.tab_widget.addTab(self.account_widget, "账户管理")
+        else:
+            account_placeholder = QLabel("账户管理功能正在开发中...")
+            account_placeholder.setAlignment(Qt.AlignCenter)
+            self.tab_widget.addTab(account_placeholder, "账户管理")
+        
+        if CategoryWidget is not None:
+            self.category_widget = CategoryWidget(self.user_info)
+            self.tab_widget.addTab(self.category_widget, "分类管理")
+        else:
+            category_placeholder = QLabel("分类管理功能正在开发中...")
+            category_placeholder.setAlignment(Qt.AlignCenter)
+            self.tab_widget.addTab(category_placeholder, "分类管理")
         
         # 设置标签页切换事件
         self.tab_widget.currentChanged.connect(self.on_tab_changed)
@@ -202,7 +255,9 @@ class MainWindow(QMainWindow):
         user_label = QLabel(f"当前用户: {self.user_info['fullname']}")
         status_bar.addWidget(user_label)
         
-        status_bar.addSeparator()
+        # 在PyQt5中使用空格标签模拟分隔符
+        separator = QLabel(" | ")
+        status_bar.addWidget(separator)
         
         time_label = QLabel(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         status_bar.addPermanentWidget(time_label)

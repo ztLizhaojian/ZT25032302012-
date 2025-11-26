@@ -47,11 +47,9 @@ class UserModel:
         Returns:
             str: 哈希后的密码
         """
-        # 添加简单的加密盐值
-        salt = "finance_system_salt"
-        # 使用SHA256进行哈希
-        hashed = hashlib.sha256((password + salt).encode()).hexdigest()
-        return hashed
+        # 使用统一的密码哈希函数
+        from src.utils.security import hash_password
+        return hash_password(password)
     
     def verify_password(self, stored_password, provided_password):
         """

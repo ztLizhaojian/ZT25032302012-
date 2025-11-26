@@ -256,7 +256,7 @@ class TransactionModel:
             params.extend([limit, offset])
             
             # 执行查询
-            results = execute_query(query, params, fetch_all=True)
+            results = execute_query(query, params, fetchall=True)
             
             return results
             
@@ -428,7 +428,7 @@ class TransactionModel:
             LIMIT ?
             """
             
-            results = execute_query(query, (limit,), fetch_all=True)
+            results = execute_query(query, (limit,), fetchall=True)
             
             return results
             

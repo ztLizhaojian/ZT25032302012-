@@ -1,0 +1,25 @@
+{
+  "generated_at": "2025-11-26T22:50:36.037315",
+  "total_suggestions": 2,
+  "severity_counts": {
+    "high": 0,
+    "medium": 0,
+    "low": 2
+  },
+  "suggestions": [
+    {
+      "severity": "low",
+      "category": "code",
+      "title": "代码结构优化",
+      "description": "检查到可能需要优化的代码结构",
+      "recommendation": "1. 确保所有数据库连接在使用后正确关闭\n2. 使用参数化查询防止SQL注入\n3. 大型循环中避免频繁的数据库操作\n4. 考虑使用连接池管理数据库连接"
+    },
+    {
+      "severity": "low",
+      "category": "memory",
+      "title": "内存使用优化",
+      "description": "应用程序可能存在内存使用优化空间",
+      "recommendation": "1. 大型数据集查询时使用分页加载\n2. 避免在内存中缓存大量数据\n3. 及时释放不再使用的大对象\n4. 使用生成器替代大型列表操作"
+    }
+  ]
+}

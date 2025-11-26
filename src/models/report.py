@@ -91,67 +91,61 @@ class ReportModel:
             dict: 利润表数据
         """
         try:
-            # 获取收入明细
+            # 查询收入明细
             income_details = execute_query(
                 """
-                SELECT c.id, c.name, SUM(t.amount) as total 
-                FROM transactions t 
-                JOIN categories c ON t.category_id = c.id 
+                SELECT c.name as category, SUM(t.amount) as amount
+                FROM transactions t
+                JOIN categories c ON t.category_id = c.id
                 WHERE t.transaction_type = 'income' 
-                AND t.transaction_date >= ? 
-                AND t.transaction_date <= ? 
-                GROUP BY c.id, c.name 
-                ORDER BY total DESC
+                AND t.transaction_date BETWEEN ? AND ?
+                GROUP BY c.name
+                ORDER BY amount DESC
                 """,
                 (start_date, end_date),
-                fetch_all=True
+                fetchall=True
             )
             
-            # 获取支出明细
+            # 查询支出明细
             expense_details = execute_query(
                 """
-                SELECT c.id, c.name, SUM(t.amount) as total 
-                FROM transactions t 
-                JOIN categories c ON t.category_id = c.id 
+                SELECT c.name as category, SUM(t.amount) as amount
+                FROM transactions t
+                JOIN categories c ON t.category_id = c.id
                 WHERE t.transaction_type = 'expense' 
-                AND t.transaction_date >= ? 
-                AND t.transaction_date <= ? 
-                GROUP BY c.id, c.name 
-                ORDER BY total ASC
+                AND t.transaction_date BETWEEN ? AND ?
+                GROUP BY c.name
+                ORDER BY amount DESC
                 """,
                 (start_date, end_date),
-                fetch_all=True
+                fetchall=True
             )
             
-            # 计算总收入
-            total_income = sum(item['total'] for item in income_details) if income_details else 0
-            
-            # 计算总支出（取绝对值）
-            total_expense = sum(abs(item['total']) for item in expense_details) if expense_details else 0
-            
-            # 计算净利润
-            net_profit = total_income - total_expense
+            # 计算总收入和总支出
+            total_income = sum(item['amount'] for item in income_details) if income_details else 0
+            total_expense = sum(item['amount'] for item in expense_details) if expense_details else 0
             
             return {
                 'start_date': start_date,
                 'end_date': end_date,
-                'income_details': income_details,
-                'expense_details': expense_details,
                 'total_income': total_income,
                 'total_expense': total_expense,
-                'net_profit': net_profit
+                'net_profit': total_income - total_expense,
+                'income_details': income_details or [],
+                'expense_details': expense_details or []
             }
             
         except Exception as e:
             print(f"生成利润表失败: {str(e)}")
+            # 返回默认值以避免程序崩溃
             return {
                 'start_date': start_date,
                 'end_date': end_date,
-                'income_details': [],
-                'expense_details': [],
                 'total_income': 0,
                 'total_expense': 0,
-                'net_profit': 0
+                'net_profit': 0,
+                'income_details': [],
+                'expense_details': []
             }
     
     @staticmethod
@@ -451,32 +445,21 @@ class ReportModel:
             if end_date:
                 query += f" AND transaction_date <= '{end_date}'"
             
-            query += "
-            ) as total_income,
-            (SELECT COALESCE(SUM(amount), 0) FROM transactions 
-             WHERE account_id = a.id AND transaction_type = 'expense'
-             """
+            query += " ) as total_income, (SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE account_id = a.id AND transaction_type = 'expense' """
             
             if start_date:
                 query += f" AND transaction_date >= '{start_date}'"
             if end_date:
                 query += f" AND transaction_date <= '{end_date}'"
             
-            query += "
-            ) as total_expense,
-            (SELECT COUNT(*) FROM transactions 
-             WHERE account_id = a.id"
+            query += " ) as total_expense, (SELECT COUNT(*) FROM transactions WHERE account_id = a.id"
             
             if start_date:
                 query += f" AND transaction_date >= '{start_date}'"
             if end_date:
                 query += f" AND transaction_date <= '{end_date}'"
             
-            query += "
-            ) as transaction_count
-            FROM accounts a 
-            WHERE a.status = 'active' 
-            ORDER BY a.account_type, a.name"
+            query += " ) as transaction_count FROM accounts a WHERE a.status = 'active' ORDER BY a.account_type, a.name"
             
             # 执行查询
             results = execute_query(query, fetch_all=True)

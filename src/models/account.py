@@ -190,7 +190,7 @@ class AccountModel:
             query += " ORDER BY name"
             
             # 执行查询
-            results = execute_query(query, params, fetch_all=True)
+            results = execute_query(query, params, fetchall=True)
             
             return results
             
@@ -330,7 +330,7 @@ class AccountModel:
             ORDER BY name
             """
             
-            results = execute_query(query, fetch_all=True)
+            results = execute_query(query, fetchall=True)
             return results
             
         except Exception as e:

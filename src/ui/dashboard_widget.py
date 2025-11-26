@@ -28,7 +28,7 @@ except ImportError as e:
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                     handlers=[
-                        logging.FileHandler(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'logs', 'dashboard.log'),
+                        logging.FileHandler(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'logs', 'dashboard.log')),
                         logging.StreamHandler()
                     ])
 logger = logging.getLogger("DashboardWidget")
@@ -168,13 +168,13 @@ class StatCardWidget(QWidget):
         self.layout.addWidget(self.subtitle_label)
         
         # 设置样式
-        self.setStyleSheet(f"""
+        self.setStyleSheet("""
             StatCardWidget {
                 background-color: white;
                 border-radius: 8px;
-                border-left: 4px solid {color};
+                border-left: 4px solid %s;
             }
-        """)
+        """ % color)
         
         # 设置大小策略
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -213,14 +213,14 @@ class StatCardWidget(QWidget):
         Args:
             color: 新的颜色
         """
-        self.title_label.setStyleSheet(f"color: {color};")
-        self.setStyleSheet(f"""
+        self.title_label.setStyleSheet("color: %s;" % color)
+        self.setStyleSheet("""
             StatCardWidget {
                 background-color: white;
                 border-radius: 8px;
-                border-left: 4px solid {color};
+                border-left: 4px solid %s;
             }
-        """)
+        """ % color)
 
 
 class DateRangeSelector(QWidget):

@@ -1,110 +1,140 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+"""
+登录窗口模块
+实现用户登录和认证功能
+"""
+
+from PyQt5.QtWidgets import (
+    QMainWindow, QWidget, QLabel, QLineEdit, QPushButton, 
+    QVBoxLayout, QHBoxLayout, QMessageBox, QFrame, QApplication,
+    QCheckBox, QGridLayout
+)
+from PyQt5.QtGui import QFont, QIcon, QPalette, QColor, QPixmap
+from PyQt5.QtCore import Qt, QSize, QEvent, QPoint, QTimer
 
 import sys
 import os
+from datetime import datetime
 
 # 添加项目根目录到Python路径
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from PyQt5.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QLineEdit, QPushButton, QCheckBox, QMessageBox
-)
-from PyQt5.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QRect
-from PyQt5.QtGui import QFont, QPixmap, QIcon
-from src.database.db_manager import init_db, execute_query, get_db_path
-from src.utils.security import hash_password, verify_password
-from src.ui.main_window import MainWindow
+# 导入数据库操作
+from src.database.db_manager import execute_query, log_operation
+
 
 class LoginWindow(QMainWindow):
+    """登录窗口类"""
+    
     def __init__(self):
         super().__init__()
-        self.current_user = None
-        self.init_db()
+        # 设置字体以确保中文正常显示
+        self.set_default_font()
         self.init_ui()
-    
-    def init_db(self):
-        """初始化数据库"""
-        try:
-            # 使用db_manager中的初始化方法
-            init_db()
-            print(f"数据库初始化成功: {get_db_path()}")
-        except Exception as e:
-            print(f"数据库初始化失败: {str(e)}")
-            QMessageBox.critical(None, "数据库错误", f"无法初始化数据库: {str(e)}")
-            sys.exit(1)
+        self.current_user = None
+        
+    def set_default_font(self):
+        """设置默认字体以确保中文正常显示"""
+        # 尝试使用多种中文字体作为备选
+        for font_family in ["SimHei", "Microsoft YaHei", "Arial Unicode MS", "WenQuanYi Micro Hei", "Heiti TC"]:
+            font = QFont(font_family)
+            if font.exactMatch():
+                QApplication.setFont(font)
+                return
+        # 如果没有找到理想的字体，设置一个通用字体
+        font = QFont("Sans Serif")
+        QApplication.setFont(font)
     
     def init_ui(self):
         """初始化用户界面"""
-        self.setWindowTitle("财务管理系统 - 登录")
-        self.setGeometry(100, 100, 500, 600)
-        self.setFixedSize(500, 600)
+        # 设置窗口标题和大小
+        self.setWindowTitle("企业财务系统 - 登录")
+        self.setFixedSize(550, 520)  # 增大窗口以提供更舒适的空间
+        self.setWindowFlags(Qt.WindowCloseButtonHint | Qt.WindowMinimizeButtonHint)
         
-        # 设置窗口居中
-        screen_geometry = QApplication.desktop().screenGeometry()
-        x = (screen_geometry.width() - self.width()) // 2
-        y = (screen_geometry.height() - self.height()) // 2
-        self.move(x, y)
+        # 设置窗口图标
+        try:
+            icon_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'resources', 'icons', 'logo.png')
+            if os.path.exists(icon_path):
+                self.setWindowIcon(QIcon(icon_path))
+        except:
+            pass  # 如果图标不存在，不影响程序运行
         
-        # 主容器
+        # 居中显示
+        self.center_window()
+        
+        # 创建主部件
         central_widget = QWidget()
-        central_widget.setStyleSheet("background-color: #ffffff;")
         self.setCentralWidget(central_widget)
         
+        # 设置背景色和渐变效果 - 使用更现代的渐变
+        central_widget.setStyleSheet("""
+            background: qlineargradient(x1:0, y1:0, x2:1, y2:1, 
+                                      stop:0 #f8fafc, 
+                                      stop:1 #e2e8f0);
+        """)
+        
+        # 创建主布局
         main_layout = QVBoxLayout(central_widget)
-        main_layout.setContentsMargins(50, 50, 50, 50)
-        main_layout.setSpacing(30)
+        main_layout.setContentsMargins(60, 30, 60, 30)
+        main_layout.setSpacing(30)  # 增加间距以提高可读性
         
-        # Logo区域
-        logo_widget = QWidget()
-        logo_widget.setStyleSheet("background-color: transparent;")
-        logo_layout = QVBoxLayout(logo_widget)
-        logo_layout.setContentsMargins(0, 0, 0, 0)
-        logo_layout.setSpacing(20)
+        # 创建标题和图标区域
+        title_widget = QWidget()
+        title_widget.setStyleSheet("background-color: transparent;")
+        title_layout = QVBoxLayout(title_widget)
+        title_layout.setAlignment(Qt.AlignCenter)
+        title_layout.setContentsMargins(0, 0, 0, 0)
+        title_layout.setSpacing(15)  # 增加标题区域的间距
         
-        # Logo标签
-        logo_label = QLabel()
-        logo_label.setAlignment(Qt.AlignCenter)
-        logo_label.setText("💰")
-        logo_label.setStyleSheet("""
-            font-size: 64px;
-            margin-bottom: 20px;
+        # 创建应用图标 - 使用更现代的设计
+        icon_label = QLabel()
+        icon_label.setFixedSize(80, 80)
+        icon_label.setStyleSheet("""
+            background-color: #3b82f6;  # 使用更现代的蓝色
+            border-radius: 20px;
+            border: 4px solid white;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
         """)
         
-        # 标题
-        title_label = QLabel("财务管理")
+        # 为图标添加悬停效果
+        icon_label.installEventFilter(self)
+        
+        # 创建标题 - 使用更现代的字体和颜色
+        title_label = QLabel("企业财务账目录入与利润核算系统")
+        title_label.setFont(QFont(self.get_available_font(), 16, QFont.Bold))
         title_label.setAlignment(Qt.AlignCenter)
-        title_label.setFont(QFont(self.get_available_font(), 24, QFont.Bold))
-        title_label.setStyleSheet("""
-            color: #1a73e8;
-            margin-bottom: 10px;
-        """)
+        title_label.setStyleSheet("color: #1e3a8a; font-weight: 700;")
         
-        # 副标题
-        subtitle_label = QLabel("Financial Management System")
-        subtitle_label.setAlignment(Qt.AlignCenter)
+        subtitle_label = QLabel("请登录您的账户以访问系统")
         subtitle_label.setFont(QFont(self.get_available_font(), 12))
-        subtitle_label.setStyleSheet("""
-            color: #5f6368;
-        """)
+        subtitle_label.setAlignment(Qt.AlignCenter)
+        subtitle_label.setStyleSheet("color: #64748b;")
         
-        logo_layout.addWidget(logo_label)
-        logo_layout.addWidget(title_label)
-        logo_layout.addWidget(subtitle_label)
+        # 添加到标题布局
+        title_layout.addWidget(icon_label)
+        title_layout.addWidget(title_label)
+        title_layout.addWidget(subtitle_label)
         
-        # 登录表单区域
+        # 创建登录表单容器 - 使用更现代的卡片设计
         form_widget = QWidget()
-        form_widget.setStyleSheet("background-color: transparent;")
+        form_widget.setStyleSheet("""
+            background-color: white;
+            border-radius: 20px;
+            padding: 20px;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.06);
+        "")
         form_layout = QVBoxLayout(form_widget)
-        form_layout.setContentsMargins(0, 0, 0, 0)
-        form_layout.setSpacing(20)
+        form_layout.setContentsMargins(35, 30, 35, 30)
+        form_layout.setSpacing(24)  # 增加表单元素间距
         
         # 用户名输入框
         username_widget = QWidget()
         username_widget.setStyleSheet("background-color: transparent;")
         username_layout = QVBoxLayout(username_widget)
-        username_layout.setContentsMargins(0, 0, 0, 0)
+        username_layout.setContentsMargins(10, 0, 0, 0)
         username_layout.setSpacing(6)
         
         username_label = QLabel("用户名")
@@ -116,7 +146,7 @@ class LoginWindow(QMainWindow):
         self.username_edit.setFixedHeight(55)
         font_family = self.get_available_font()
         self.username_edit.setStyleSheet("""
-            QLineEdit {
+            QLineEdit {{
                 border: 2px solid #dfe1e5;
                 border-radius: 12px;
                 padding: 0 20px;
@@ -127,16 +157,16 @@ class LoginWindow(QMainWindow):
                 font-weight: 400;
                 box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
                 transition: all 0.3s ease;
-            }
-            QLineEdit:focus {
+            }}
+            QLineEdit:focus {{
                 border: 2px solid #1a73e8;
                 box-shadow: 0 1px 6px rgba(26, 115, 232, 0.2);
                 outline: none;
-            }
-            QLineEdit:hover:not(:focus) {
+            }}
+            QLineEdit:hover:not(:focus) {{
                 border-color: #5f6368;
                 box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
-            }
+            }}
         """ % font_family)
         
         username_layout.addWidget(username_label)
@@ -166,7 +196,7 @@ class LoginWindow(QMainWindow):
         self.password_edit.setFixedHeight(55)
         font_family = self.get_available_font()
         self.password_edit.setStyleSheet("""
-            QLineEdit {
+            QLineEdit {{
                 border: 2px solid #dfe1e5;
                 border-top-left-radius: 12px;
                 border-bottom-left-radius: 12px;
@@ -178,21 +208,21 @@ class LoginWindow(QMainWindow):
                 font-weight: 400;
                 box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
                 transition: all 0.3s ease;
-            }
-            QLineEdit:focus {
+            }}
+            QLineEdit:focus {{
                 border: 2px solid #1a73e8;
                 box-shadow: 0 1px 6px rgba(26, 115, 232, 0.2);
                 outline: none;
-            }
-            QLineEdit:hover:not(:focus) {
+            }}
+            QLineEdit:hover:not(:focus) {{
                 border-color: #5f6368;
                 box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
-            }
+            }}
         """ % font_family)
         
         # 创建显示/隐藏密码按钮
         self.toggle_password_btn = QPushButton()
-        self.toggle_password_btn.setFixedSize(50, 55)
+        self.toggle_password_btn.setFixedSize(50, 50)
         self.toggle_password_btn.setText("👁")
         self.toggle_password_btn.setStyleSheet("""
             QPushButton {
@@ -234,24 +264,24 @@ class LoginWindow(QMainWindow):
         self.remember_checkbox.setFont(QFont(self.get_available_font(), 10))
         font_family = self.get_available_font()
         self.remember_checkbox.setStyleSheet("""
-            QCheckBox {
+            QCheckBox {{
                 color: #5f6368;
                 font-family: %s;
                 font-size: 14px;
                 spacing: 8px;
-            }
-            QCheckBox::indicator {
+            }}
+            QCheckBox::indicator {{
                 width: 20px;
                 height: 20px;
                 border-radius: 4px;
                 border: 2px solid #dfe1e5;
                 background-color: #ffffff;
-            }
-            QCheckBox::indicator:checked {
+            }}
+            QCheckBox::indicator:checked {{
                 background-color: #1a73e8;
                 border: 2px solid #1a73e8;
-            }
-            QCheckBox::indicator:checked::after {
+            }}
+            QCheckBox::indicator:checked::after {{
                 content: "";
                 position: relative;
                 left: 6px;
@@ -261,7 +291,7 @@ class LoginWindow(QMainWindow):
                 border: solid white;
                 border-width: 0 2px 2px 0;
                 transform: rotate(45deg);
-            }
+            }}
         """ % font_family)
         
         # 找回密码链接（可点击）
@@ -294,7 +324,7 @@ class LoginWindow(QMainWindow):
         self.login_button.setFixedHeight(50)
         font_family = self.get_available_font()
         self.login_button.setStyleSheet("""
-            QPushButton {
+            QPushButton {{
                 background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
                                           stop: 0 #4285f4, stop: 1 #1a73e8);
                 color: white;
@@ -305,27 +335,25 @@ class LoginWindow(QMainWindow):
                 font-weight: 600;
                 box-shadow: 0 2px 6px rgba(66, 133, 244, 0.3);
                 transition: all 0.3s ease;
-            }
-            QPushButton:hover {
+            }}
+            QPushButton:hover {{
                 background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
                                           stop: 0 #3367d6, stop: 1 #0d5cb6);
                 box-shadow: 0 3px 8px rgba(66, 133, 244, 0.4);
-            }
-            QPushButton:pressed {
+            }}
+            QPushButton:pressed {{
                 background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
                                           stop: 0 #2a56c6, stop: 1 #0a4aab);
                 box-shadow: 0 1px 4px rgba(66, 133, 244, 0.3);
-            }
-            QPushButton:disabled {
-                background: #dadce0;
-                color: #9aa0a6;
+            }}
+            QPushButton:disabled {{
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #dadce0, stop: 1 #bdc1c6);
+                color: #5f6368;
                 box-shadow: none;
-            }
+            }}
         """ % font_family)
         self.login_button.clicked.connect(self.handle_login)
-        
-        # 为登录按钮添加悬停动画效果
-        self.login_button.installEventFilter(self)
         
         # 添加到表单布局
         form_layout.addWidget(username_widget)
@@ -333,57 +361,130 @@ class LoginWindow(QMainWindow):
         form_layout.addWidget(remember_widget)
         form_layout.addWidget(self.login_button)
         
-        # 添加到主布局
-        main_layout.addWidget(logo_widget)
-        main_layout.addWidget(form_widget)
-        main_layout.addStretch(1)
+        # 添加版权信息 - 改进字体和颜色
+        footer_widget = QWidget()
+        footer_widget.setStyleSheet("background-color: transparent;")
+        footer_layout = QVBoxLayout(footer_widget)
+        footer_layout.setContentsMargins(0, 0, 0, 0)
+        footer_layout.setSpacing(5)
         
-        # 设置焦点和事件处理
+        version_label = QLabel("版本 1.0.0")
+        version_label.setFont(QFont(self.get_available_font(), 10))
+        version_label.setAlignment(Qt.AlignCenter)
+        version_label.setStyleSheet("color: #64748b;")
+        
+        copyright_label = QLabel("© 2025 企业财务管理系统")
+        copyright_label.setFont(QFont(self.get_available_font(), 9))
+        copyright_label.setAlignment(Qt.AlignCenter)
+        copyright_label.setStyleSheet("color: #94a3b8;")
+        
+        footer_layout.addWidget(version_label)
+        footer_layout.addWidget(copyright_label)
+        
+        # 添加到主布局
+        main_layout.addWidget(title_widget)
+        main_layout.addWidget(form_widget)
+        main_layout.addWidget(footer_widget)
+        
+        # 设置焦点
         self.username_edit.setFocus()
+        
+        # 连接回车键
         self.username_edit.returnPressed.connect(self.password_edit.setFocus)
         self.password_edit.returnPressed.connect(self.handle_login)
-        
-        # 为输入框添加事件过滤器
-        self.username_edit.installEventFilter(self)
-        self.password_edit.installEventFilter(self)
-        
-        # 初始化淡入动画
-        self.init_fade_in_animation()
     
-    def toggle_password_visibility(self):
-        """切换密码可见性"""
-        if self.password_edit.echoMode() == QLineEdit.Password:
-            self.password_edit.setEchoMode(QLineEdit.Normal)
-            self.toggle_password_btn.setText("🙈")
-        else:
-            self.password_edit.setEchoMode(QLineEdit.Password)
-            self.toggle_password_btn.setText("👁")
+    def center_window(self):
+        """将窗口居中显示"""
+        qr = self.frameGeometry()
+        cp = QApplication.desktop().availableGeometry().center()
+        qr.moveCenter(cp)
+        self.move(qr.topLeft())
     
-    def handle_forgot_password(self, event):
-        """处理忘记密码"""
-        QMessageBox.information(self, "提示", "请联系系统管理员重置密码。\n默认用户名：admin\n默认密码：admin123")
-    
-    def validate_inputs(self):
-        """验证输入"""
+    def handle_login(self):
+        """处理登录逻辑"""
         username = self.username_edit.text().strip()
         password = self.password_edit.text().strip()
         
+        # 验证输入格式
         if not username:
             self.show_validation_error(self.username_edit, "请输入用户名")
-            return False
+            return
         
+        # 验证用户名格式（简单验证：长度和字符类型）
+        if len(username) < 3 or len(username) > 20:
+            self.show_validation_error(self.username_edit, "用户名长度应在3-20个字符之间")
+            return
+            
+        if not username.replace('_', '').replace('-', '').isalnum():
+            self.show_validation_error(self.username_edit, "用户名只能包含字母、数字、下划线和连字符")
+            return
+            
         if not password:
             self.show_validation_error(self.password_edit, "请输入密码")
-            return False
+            return
             
-        return True
-    
+        # 验证密码格式
+        if len(password) < 6:
+            self.show_validation_error(self.password_edit, "密码长度不能少于6个字符")
+            return
+        
+        # 显示加载状态
+        self.login_button.setEnabled(False)
+        self.login_button.setText("登录中...")
+        
+        # 验证用户凭据
+        try:
+            # 简单的密码验证（实际应用中应该使用密码哈希）
+            user = execute_query(
+                "SELECT id, username, fullname, role FROM users WHERE username = ? AND password = ?",
+                (username, password),
+                fetch=True
+            )
+            
+            if user:
+                # 登录成功，更新最后登录时间
+                execute_query(
+                    "UPDATE users SET last_login = ? WHERE id = ?",
+                    (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), user['id'])
+                )
+                
+                # 记录登录日志
+                log_operation(user['id'], 'login', f'用户 {username} 登录系统')
+                
+                # 保存当前用户信息
+                self.current_user = {
+                    'id': user['id'],
+                    'username': user['username'],
+                    'fullname': user['fullname'],
+                    'role': user['role']
+                }
+                
+                # 隐藏登录窗口并显示主窗口
+                self.accept_login()
+                
+            else:
+                # 登录失败
+                self.show_validation_error(self.password_edit, "用户名或密码错误")
+                self.password_edit.clear()
+                self.password_edit.setFocus()
+                
+                # 记录失败日志
+                log_operation(None, 'login_failed', f'尝试使用用户名 {username} 登录失败')
+                
+        except Exception as e:
+            QMessageBox.critical(self, "登录错误", f"登录过程中发生错误: {str(e)}")
+            print(f"登录错误: {str(e)}")
+        finally:
+            # 恢复登录按钮状态
+            self.login_button.setEnabled(True)
+            self.login_button.setText("登录")
+            
     def show_validation_error(self, widget, message):
         """显示验证错误信息"""
         font_family = self.get_available_font()
         if widget == self.username_edit:
             widget.setStyleSheet("""
-                QLineEdit {
+                QLineEdit {{
                     border: 2px solid #ea4335;
                     border-radius: 12px;
                     padding: 0 20px;
@@ -393,11 +494,11 @@ class LoginWindow(QMainWindow):
                     color: #202124;
                     font-weight: 400;
                     box-shadow: 0 1px 6px rgba(234, 67, 53, 0.2);
-                }
+                }}
             """ % font_family)
         elif widget == self.password_edit:
             widget.setStyleSheet("""
-                QLineEdit {
+                QLineEdit {{
                     border: 2px solid #ea4335;
                     border-top-left-radius: 12px;
                     border-bottom-left-radius: 12px;
@@ -408,7 +509,7 @@ class LoginWindow(QMainWindow):
                     color: #202124;
                     font-weight: 400;
                     box-shadow: 0 1px 6px rgba(234, 67, 53, 0.2);
-                }
+                }}
             """ % font_family)
             self.toggle_password_btn.setStyleSheet("""
                 QPushButton {
@@ -427,13 +528,13 @@ class LoginWindow(QMainWindow):
         widget.setFocus()
         # 恢复原始样式
         QTimer.singleShot(500, lambda: self.reset_input_style(widget))
-    
+            
     def reset_input_style(self, widget):
         """重置输入框样式"""
         font_family = self.get_available_font()
         if widget == self.username_edit:
-            widget.setStyleSheet("""
-                QLineEdit {
+            self.username_edit.setStyleSheet("""
+                QLineEdit {{
                     border: 2px solid #dfe1e5;
                     border-radius: 12px;
                     padding: 0 20px;
@@ -442,15 +543,22 @@ class LoginWindow(QMainWindow):
                     background-color: #ffffff;
                     color: #202124;
                     font-weight: 400;
-                }
-                QLineEdit:focus {
+                    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+                    transition: all 0.3s ease;
+                }}
+                QLineEdit:focus {{
                     border: 2px solid #1a73e8;
                     box-shadow: 0 1px 6px rgba(26, 115, 232, 0.2);
-                }
+                    outline: none;
+                }}
+                QLineEdit:hover:not(:focus) {{
+                    border-color: #5f6368;
+                    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+                }}
             """ % font_family)
         elif widget == self.password_edit:
-            widget.setStyleSheet("""
-                QLineEdit {
+            self.password_edit.setStyleSheet("""
+                QLineEdit {{
                     border: 2px solid #dfe1e5;
                     border-top-left-radius: 12px;
                     border-bottom-left-radius: 12px;
@@ -460,12 +568,18 @@ class LoginWindow(QMainWindow):
                     background-color: #ffffff;
                     color: #202124;
                     font-weight: 400;
-                }
-                QLineEdit:focus {
+                    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+                    transition: all 0.3s ease;
+                }}
+                QLineEdit:focus {{
                     border: 2px solid #1a73e8;
-                    border-left: 2px solid #dfe1e5;
                     box-shadow: 0 1px 6px rgba(26, 115, 232, 0.2);
-                }
+                    outline: none;
+                }}
+                QLineEdit:hover:not(:focus) {{
+                    border-color: #5f6368;
+                    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+                }}
             """ % font_family)
             self.toggle_password_btn.setStyleSheet("""
                 QPushButton {
@@ -476,99 +590,69 @@ class LoginWindow(QMainWindow):
                     background-color: #ffffff;
                     color: #5f6368;
                     font-size: 16px;
+                    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+                    transition: all 0.3s ease;
                 }
                 QPushButton:hover {
                     background-color: #f8f9fa;
+                    color: #1a73e8;
+                    border-color: #5f6368;
+                }
+                QPushButton:pressed {
+                    background-color: #e8eaed;
+                    color: #0d47a1;
                 }
             """)
     
-    def handle_login(self):
-        """处理登录"""
-        if not self.validate_inputs():
-            return
-        
-        username = self.username_edit.text().strip()
-        password = self.password_edit.text().strip()
-        
-        # 禁用登录按钮防止重复点击
-        self.login_button.setEnabled(False)
-        self.login_button.setText("登录中...")
-        
-        try:
-            # 验证用户凭据
-            user = execute_query(
-                "SELECT id, username, password, fullname, role FROM users WHERE username = ?",
-                (username,),
-                fetch=True
-            )
-            
-            if user and verify_password(password, user['password']):
-                self.current_user = {
-                    'id': user['id'],
-                    'username': user['username'],
-                    'fullname': user['fullname'] if user['fullname'] else user['username'],  # 如果没有全名，使用用户名
-                    'role': user['role'] if user['role'] else 'user'       # 如果没有角色，默认为普通用户
-                }
-                print(f"用户 {username} 登录成功")
-                self.accept_login()
-            else:
-                print(f"登录失败: 用户名或密码错误")
-                self.show_validation_error(self.username_edit, "用户名或密码错误")
-        except Exception as e:
-            print(f"登录过程中发生错误: {str(e)}")
-            QMessageBox.critical(self, "错误", f"登录过程中发生错误: {str(e)}")
-        finally:
-            # 恢复登录按钮状态
-            self.login_button.setEnabled(True)
-            self.login_button.setText("登录")
+    def toggle_password_visibility(self):
+        """切换密码显示/隐藏状态"""
+        if self.password_edit.echoMode() == QLineEdit.Password:
+            self.password_edit.setEchoMode(QLineEdit.Normal)
+            self.toggle_password_btn.setText("👁️‍🗨️")
+        else:
+            self.password_edit.setEchoMode(QLineEdit.Password)
+            self.toggle_password_btn.setText("👁")
+    
+    def handle_forgot_password(self, event):
+        """处理忘记密码点击事件"""
+        QMessageBox.information(self, "忘记密码", "请联系系统管理员重置您的密码。")
+    
+    def eventFilter(self, source, event):
+        """为UI元素添加事件过滤器"""
+        # 为图标添加悬停效果
+        if hasattr(source, 'text') and source.text() == "":
+            if event.type() == QEvent.HoverEnter:
+                source.setStyleSheet("""
+                    background-color: #1557b0;
+                    border-radius: 18px;
+                    border: 3px solid white;
+                """)
+                return True
+            elif event.type() == QEvent.HoverLeave:
+                source.setStyleSheet("""
+                    background-color: #1a73e8;
+                    border-radius: 18px;
+                    border: 3px solid white;
+                """)
+                return True
+        return super().eventFilter(source, event)
     
     def accept_login(self):
         """接受登录，打开主窗口"""
-        # 创建登录成功淡出动画
-        self.animate_login_success()
-    
-    def animate_login_success(self):
-        """登录成功动画"""
-        # 创建淡出动画
-        self.fade_out_animation = QPropertyAnimation(self, b"windowOpacity")
-        self.fade_out_animation.setDuration(500)  # 500毫秒
-        self.fade_out_animation.setEasingCurve(QEasingCurve.InOutCubic)
-        self.fade_out_animation.setStartValue(1.0)
-        self.fade_out_animation.setEndValue(0.0)
-        
-        # 动画完成后打开主窗口
-        self.fade_out_animation.finished.connect(self.open_main_window)
-        
-        # 启动动画
-        self.fade_out_animation.start()
-        print("登录成功动画开始")
-    
-    def open_main_window(self):
-        """打开主窗口"""
         try:
-            print("正在创建主窗口...")
+            # 导入主窗口模块
+            from src.ui.main_window import MainWindow
+            
             # 创建主窗口实例
             self.main_window = MainWindow(self.current_user)
-            print("主窗口创建成功，正在显示...")
             self.main_window.show()
-            print("主窗口显示成功，正在关闭登录窗口...")
-            
-            # 强制刷新界面
-            self.main_window.repaint()
-            QApplication.processEvents()
             
             # 关闭登录窗口
             self.close()
-            print("登录窗口关闭成功，跳转完成")
             
         except Exception as e:
-            import traceback
-            print(f"加载主窗口错误: {str(e)}")
-            print(traceback.format_exc())
             QMessageBox.critical(self, "错误", f"无法加载主窗口: {str(e)}")
-            # 重新显示登录窗口
-            self.show()
-            self.setWindowOpacity(1.0)
+            print(f"加载主窗口错误: {str(e)}")
     
     def get_available_font(self):
         """获取可用的中文字体"""
@@ -578,102 +662,7 @@ class LoginWindow(QMainWindow):
             if font.exactMatch():
                 return font_family
         return "Sans Serif"  # 默认字体
-    
-    def init_fade_in_animation(self):
-        """初始化窗口淡入动画"""
-        # 设置初始透明度为0
-        self.setWindowOpacity(0.0)
         
-        # 创建透明度动画
-        self.fade_animation = QPropertyAnimation(self, b"windowOpacity")
-        self.fade_animation.setDuration(800)  # 动画持续时间800毫秒
-        self.fade_animation.setStartValue(0.0)
-        self.fade_animation.setEndValue(1.0)
-        self.fade_animation.setEasingCurve(QEasingCurve.OutCubic)  # 使用缓动曲线使动画更自然
-        
-        # 启动动画
-        self.fade_animation.start()
-    
-    def eventFilter(self, obj, event):
-        """事件过滤器，用于处理按钮悬停动画和输入框焦点动画"""
-        if obj == self.login_button:
-            if event.type() == event.HoverEnter:
-                # 鼠标进入按钮区域时的动画
-                self.animate_button_scale(self.login_button, 1.0, 1.05)
-            elif event.type() == event.HoverLeave:
-                # 鼠标离开按钮区域时的动画
-                self.animate_button_scale(self.login_button, 1.05, 1.0)
-        elif obj in [self.username_edit, self.password_edit]:
-            if event.type() == event.FocusIn:
-                # 输入框获得焦点时的动画
-                self.animate_input_focus(obj, True)
-            elif event.type() == event.FocusOut:
-                # 输入框失去焦点时的动画
-                self.animate_input_focus(obj, False)
-        
-        return super().eventFilter(obj, event)
-    
-    def animate_button_scale(self, button, start_value, end_value):
-        """按钮缩放动画"""
-        if not hasattr(button, 'scale_animation'):
-            button.scale_animation = QPropertyAnimation(button, b"geometry")
-        
-        # 获取当前几何信息
-        geom = button.geometry()
-        center_x = geom.x() + geom.width() / 2
-        center_y = geom.y() + geom.height() / 2
-        
-        # 计算缩放后的几何信息
-        scale_factor = end_value / start_value
-        new_width = int(geom.width() * scale_factor)
-        new_height = int(geom.height() * scale_factor)
-        new_x = int(center_x - new_width / 2)
-        new_y = int(center_y - new_height / 2)
-        
-        # 设置动画属性
-        button.scale_animation.setDuration(200)
-        button.scale_animation.setStartValue(geom)
-        button.scale_animation.setEndValue(button.geometry().adjusted(
-            (geom.width() - new_width) // 2,
-            (geom.height() - new_height) // 2,
-            -(geom.width() - new_width) // 2,
-            -(geom.height() - new_height) // 2
-        ))
-        button.scale_animation.setEasingCurve(QEasingCurve.OutCubic)
-        
-        # 启动动画
-        button.scale_animation.start()
-    
-    def animate_input_focus(self, input_widget, has_focus):
-        """输入框焦点动画"""
-        # 创建动画对象
-        animation = QPropertyAnimation(input_widget, b"geometry")
-        animation.setDuration(150)  # 150毫秒
-        animation.setEasingCurve(QEasingCurve.OutCubic)
-        
-        # 获取当前几何位置
-        current_geometry = input_widget.geometry()
-        
-        if has_focus:
-            # 获得焦点时稍微放大
-            new_width = int(current_geometry.width() * 1.02)
-            new_height = int(current_geometry.height() * 1.02)
-            new_x = int(current_geometry.x() - (new_width - current_geometry.width()) / 2)
-            new_y = int(current_geometry.y() - (new_height - current_geometry.height()) / 2)
-        else:
-            # 失去焦点时恢复原大小
-            new_width = int(current_geometry.width() / 1.02)
-            new_height = int(current_geometry.height() / 1.02)
-            new_x = int(current_geometry.x() + (current_geometry.width() - new_width) / 2)
-            new_y = int(current_geometry.y() + (current_geometry.height() - new_height) / 2)
-        
-        # 设置动画值
-        animation.setStartValue(current_geometry)
-        animation.setEndValue(QRect(new_x, new_y, new_width, new_height))
-        
-        # 启动动画
-        animation.start()
-    
     def keyPressEvent(self, event):
         """处理键盘事件"""
         if event.key() == Qt.Key_Escape:

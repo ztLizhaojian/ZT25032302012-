@@ -33,7 +33,8 @@ class DBAccess:
     def connect(self):
         """建立数据库连接"""
         try:
-            if self.connection is None or self.connection.closed:
+            # 检查连接是否已经建立且有效
+            if self.connection is None:
                 self.connection = sqlite3.connect(
                     self.db_path,
                     detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES,
@@ -51,7 +52,7 @@ class DBAccess:
     def disconnect(self):
         """关闭数据库连接"""
         try:
-            if self.connection is not None and not self.connection.closed:
+            if self.connection is not None:
                 self.connection.close()
                 self.connection = None
                 self.cursor = None

@@ -1,13 +1,19 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-数据库管理模块 - 作为数据访问层的统一接口
+# 数据库管理模块 - 作为数据访问层的统一接口
 集成了数据库连接、初始化、查询执行等功能
 """
 
 import os
 from datetime import datetime
 import logging
+
+# 添加项目根目录到Python路径
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+from src.utils.security import hash_password
 
 # 配置日志
 logging.basicConfig(level=logging.INFO,
@@ -366,195 +372,219 @@ def _local_init_database():
         conn = _local_get_db_connection()
         cursor = conn.cursor()
         
-        # 创建用户表
+        # 创建用户表（与db_migration.py保持一致）
         cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
+            username TEXT NOT NULL UNIQUE,
             password TEXT NOT NULL,
             fullname TEXT NOT NULL,
             email TEXT,
             role TEXT DEFAULT 'user',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            last_login TIMESTAMP
+            status TEXT DEFAULT 'active',
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            last_login TEXT
         )
         ''')
         
-        # 创建账户表
+        # 创建账户表（与db_migration.py保持一致）
         cursor.execute('''
         CREATE TABLE IF NOT EXISTS accounts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
-            type TEXT NOT NULL,
+            account_type TEXT NOT NULL,
             currency TEXT DEFAULT 'CNY',
-            initial_balance REAL DEFAULT 0.0,
+            balance REAL DEFAULT 0.0,
             description TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            status TEXT DEFAULT 'active',
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
         ''')
         
-        # 创建分类表
+        # 创建分类表（与db_migration.py保持一致）
         cursor.execute('''
         CREATE TABLE IF NOT EXISTS categories (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
-            type TEXT NOT NULL,
+            category_type TEXT NOT NULL,
             parent_id INTEGER,
-            icon TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            icon TEXT DEFAULT 'default',
+            color TEXT DEFAULT '#007bff',
+            description TEXT,
+            is_system INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (parent_id) REFERENCES categories(id)
         )
         ''')
         
-        # 创建交易记录表
+        # 创建交易记录表（与db_migration.py保持一致）
         cursor.execute('''
         CREATE TABLE IF NOT EXISTS transactions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            transaction_type TEXT NOT NULL,
+            amount REAL NOT NULL,
             account_id INTEGER NOT NULL,
             category_id INTEGER NOT NULL,
-            type TEXT NOT NULL,
-            amount REAL NOT NULL,
-            currency TEXT DEFAULT 'CNY',
-            transaction_date TIMESTAMP NOT NULL,
+            transaction_date TEXT NOT NULL,
             description TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            receipt_number TEXT,
+            payment_method TEXT,
             created_by INTEGER,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (account_id) REFERENCES accounts(id),
             FOREIGN KEY (category_id) REFERENCES categories(id),
             FOREIGN KEY (created_by) REFERENCES users(id)
         )
         ''')
         
-        # 创建产品表
+        # 创建预算表（与db_migration.py保持一致）
         cursor.execute('''
-        CREATE TABLE IF NOT EXISTS products (
+        CREATE TABLE IF NOT EXISTS budgets (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            code TEXT,
-            category TEXT,
-            cost_price REAL,
-            selling_price REAL,
-            unit TEXT,
+            category_id INTEGER NOT NULL,
+            amount REAL NOT NULL,
+            period TEXT NOT NULL,
+            start_date TEXT NOT NULL,
+            end_date TEXT NOT NULL,
             description TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (category_id) REFERENCES categories(id)
         )
         ''')
         
-        # 创建客户表
+        # 创建附件表（与db_migration.py保持一致）
         cursor.execute('''
-        CREATE TABLE IF NOT EXISTS customers (
+        CREATE TABLE IF NOT EXISTS attachments (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            contact_person TEXT,
-            phone TEXT,
-            email TEXT,
-            address TEXT,
-            description TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            transaction_id INTEGER NOT NULL,
+            file_path TEXT NOT NULL,
+            file_name TEXT NOT NULL,
+            file_size INTEGER,
+            file_type TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (transaction_id) REFERENCES transactions(id)
         )
         ''')
         
-        # 创建系统设置表
+        # 创建系统配置表（与db_migration.py保持一致）
         cursor.execute('''
-        CREATE TABLE IF NOT EXISTS settings (
+        CREATE TABLE IF NOT EXISTS system_configs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            key TEXT UNIQUE NOT NULL,
-            value TEXT NOT NULL,
+            config_key TEXT NOT NULL UNIQUE,
+            config_value TEXT,
+            config_type TEXT DEFAULT 'string',
             description TEXT,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
         ''')
         
-        # 创建操作日志表
+        # 创建操作日志表（与db_migration.py保持一致）
         cursor.execute('''
         CREATE TABLE IF NOT EXISTS operation_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER,
-            action TEXT NOT NULL,
-            details TEXT,
+            operation_type TEXT NOT NULL,
+            operation_desc TEXT,
+            operation_table TEXT,
+            operation_data TEXT,
             ip_address TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(id)
         )
         ''')
         
-        # 创建索引以提高查询性能
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(transaction_date)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_transactions_account ON transactions(account_id)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions(category_id)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(type)')
+        # 创建索引以提高查询性能（与db_migration.py保持一致）
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(transaction_date)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_transactions_account ON transactions(account_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions(category_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(transaction_type)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_accounts_status ON accounts(status)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_categories_type ON categories(category_type)")
         
-        # 检查是否需要创建默认管理员账户
-        cursor.execute('SELECT COUNT(*) FROM users')
+        # 检查是否需要创建默认管理员账户（与db_migration.py保持一致）
+        cursor.execute('SELECT COUNT(*) FROM users WHERE role = ?', ('admin',))
         if cursor.fetchone()[0] == 0:
-            # 创建默认管理员账户 (密码: admin123)
+            # 创建默认管理员用户，使用哈希处理的密码
+            admin_password = 'admin123'
+            hashed_password = hash_password(admin_password)
             cursor.execute('''
             INSERT INTO users (username, password, fullname, email, role)
             VALUES (?, ?, ?, ?, ?)
-            ''', ('admin', 'admin123', '系统管理员', 'admin@example.com', 'admin'))
+            ''', ('admin', hashed_password, '系统管理员', 'admin@example.com', 'admin'))
         
-        # 创建默认账户类型
+        # 创建默认账户（与db_migration.py保持一致）
         cursor.execute('SELECT COUNT(*) FROM accounts')
         if cursor.fetchone()[0] == 0:
             default_accounts = [
-                ('现金账户', 'cash', 'CNY', 0.0, '企业现金账户'),
-                ('银行存款', 'bank', 'CNY', 0.0, '企业银行存款账户'),
-                ('应收账款', 'receivable', 'CNY', 0.0, '客户应收账款'),
-                ('应付账款', 'payable', 'CNY', 0.0, '供应商应付账款')
+                ('现金账户', 'asset', 0.0, '主要用于记录现金收支', 'active'),
+                ('银行存款', 'asset', 0.0, '主要用于记录银行账户收支', 'active'),
+                ('应收账款', 'asset', 0.0, '记录客户欠款', 'active'),
+                ('应付账款', 'liability', 0.0, '记录欠供应商款项', 'active'),
+                ('股本', 'equity', 0.0, '记录公司注册资本', 'active')
             ]
+            
             cursor.executemany('''
-            INSERT INTO accounts (name, type, currency, initial_balance, description)
+            INSERT INTO accounts (name, account_type, balance, description, status)
             VALUES (?, ?, ?, ?, ?)
             ''', default_accounts)
         
-        # 创建默认分类
+        # 创建默认分类（与db_migration.py保持一致）
         cursor.execute('SELECT COUNT(*) FROM categories')
         if cursor.fetchone()[0] == 0:
-            # 收入分类
+            # 创建默认收入分类
             income_categories = [
-                ('主营业务收入', 'income', None, '💰'),
-                ('其他业务收入', 'income', None, '💵'),
-                ('投资收益', 'income', None, '📈'),
-                ('营业外收入', 'income', None, '🎁')
+                ('主营业务收入', 'income', None, '💰', '#28a745', 'default', '销售商品或提供服务的收入', 1),
+                ('其他业务收入', 'income', None, '💵', '#20c997', 'default', '非主营业务的收入', 1),
+                ('投资收益', 'income', None, '📈', '#6f42c1', 'default', '投资获得的收益', 1),
+                ('营业外收入', 'income', None, '🎁', '#ffc107', 'default', '与生产经营无直接关系的收入', 1)
             ]
-            cursor.executemany('''
-            INSERT INTO categories (name, type, parent_id, icon)
-            VALUES (?, ?, ?, ?)
-            ''', income_categories)
             
-            # 支出分类
+            for category in income_categories:
+                cursor.execute('''
+                INSERT INTO categories (name, category_type, parent_id, icon, color, description, is_system)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ''', category)
+            
+            # 创建默认支出分类
             expense_categories = [
-                ('主营业务成本', 'expense', None, '📦'),
-                ('营业费用', 'expense', None, '🏢'),
-                ('管理费用', 'expense', None, '⚙️'),
-                ('财务费用', 'expense', None, '💸'),
-                ('营业外支出', 'expense', None, '❌')
+                ('主营业务成本', 'expense', None, '📦', '#dc3545', 'default', '销售商品或提供服务的成本', 1),
+                ('销售费用', 'expense', None, '🏢', '#fd7e14', 'default', '销售过程中发生的各项费用', 1),
+                ('管理费用', 'expense', None, '⚙️', '#17a2b8', 'default', '企业管理部门发生的费用', 1),
+                ('财务费用', 'expense', None, '💸', '#6c757d', 'default', '筹集生产经营所需资金等发生的费用', 1),
+                ('营业外支出', 'expense', None, '❌', '#343a40', 'default', '与生产经营无直接关系的支出', 1)
             ]
-            cursor.executemany('''
-            INSERT INTO categories (name, type, parent_id, icon)
-            VALUES (?, ?, ?, ?)
-            ''', expense_categories)
+            
+            for category in expense_categories:
+                cursor.execute('''
+                INSERT INTO categories (name, category_type, parent_id, icon, color, description, is_system)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ''', category)
         
-        # 创建默认系统设置
-        cursor.execute('SELECT COUNT(*) FROM settings')
+        # 创建默认系统配置（与db_migration.py保持一致）
+        cursor.execute('SELECT COUNT(*) FROM system_configs')
         if cursor.fetchone()[0] == 0:
-            default_settings = [
-                ('company_name', '示例企业', '企业名称'),
-                ('default_currency', 'CNY', '默认货币'),
-                ('decimal_places', '2', '小数位数'),
-                ('fiscal_year_start', '01-01', '财年开始日期'),
-                ('auto_backup', 'true', '自动备份'),
-                ('backup_interval', '7', '备份间隔(天)'),
-                ('theme', 'light', '系统主题')
+            default_configs = [
+                ('company_name', '未设置公司名称', 'string', '公司名称'),
+                ('currency', 'CNY', 'string', '默认货币'),
+                ('decimal_places', '2', 'integer', '小数位数'),
+                ('auto_backup', 'true', 'boolean', '自动备份'),
+                ('backup_frequency', 'daily', 'string', '备份频率'),
+                ('language', 'zh_CN', 'string', '系统语言'),
+                ('theme', 'light', 'string', '系统主题'),
+                ('default_period', 'month', 'string', '默认报表周期'),
+                ('data_retention_days', '365', 'integer', '数据保留天数'),
+                ('log_level', 'INFO', 'string', '日志级别')
             ]
+            
             cursor.executemany('''
-            INSERT INTO settings (key, value, description)
-            VALUES (?, ?, ?)
-            ''', default_settings)
+            INSERT INTO system_configs (config_key, config_value, config_type, description)
+            VALUES (?, ?, ?, ?)
+            ''', default_configs)
         
         # 提交事务
         conn.commit()

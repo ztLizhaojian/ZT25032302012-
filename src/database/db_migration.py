@@ -5,6 +5,12 @@ import json
 import logging
 from datetime import datetime
 
+# 添加项目根目录到Python路径
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+from src.utils.security import hash_password
+
 # 配置日志
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -13,6 +19,8 @@ logging.basicConfig(level=logging.INFO,
                         logging.StreamHandler()
                     ])
 logger = logging.getLogger("DBMigration")
+
+
 
 
 class DBMigration:
@@ -76,6 +84,7 @@ class DBMigration:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT NOT NULL UNIQUE,
                 password TEXT NOT NULL,
+                fullname TEXT NOT NULL,
                 email TEXT,
                 role TEXT DEFAULT 'user',
                 status TEXT DEFAULT 'active',
@@ -236,11 +245,12 @@ class DBMigration:
             # 1. 检查是否已有管理员用户
             cursor.execute("SELECT COUNT(*) FROM users WHERE role = 'admin'")
             if cursor.fetchone()[0] == 0:
-                # 创建默认管理员用户
-                admin_password = 'admin123'  # 实际应用中应该加密存储
+                # 创建默认管理员用户，使用哈希处理的密码
+                admin_password = 'admin123'
+                hashed_password = hash_password(admin_password)
                 cursor.execute(
-                    "INSERT INTO users (username, password, email, role) VALUES (?, ?, ?, ?)",
-                    ('admin', admin_password, 'admin@example.com', 'admin')
+                    "INSERT INTO users (username, password, fullname, email, role) VALUES (?, ?, ?, ?, ?)",
+                    ('admin', hashed_password, '系统管理员', 'admin@example.com', 'admin')
                 )
                 logger.info("创建默认管理员用户成功")
             
@@ -249,16 +259,16 @@ class DBMigration:
             if cursor.fetchone()[0] == 0:
                 # 创建默认账户
                 default_accounts = [
-                    ('现金账户', 'asset', 0.0, '主要用于记录现金收支'),
-                    ('银行存款', 'asset', 0.0, '主要用于记录银行账户收支'),
-                    ('应收账款', 'asset', 0.0, '记录客户欠款'),
-                    ('应付账款', 'liability', 0.0, '记录欠供应商款项'),
-                    ('股本', 'equity', 0.0, '记录公司注册资本')
+                    ('现金账户', 'asset', 'CNY', 0.0, '主要用于记录现金收支', 'active'),
+                    ('银行存款', 'asset', 'CNY', 0.0, '主要用于记录银行账户收支', 'active'),
+                    ('应收账款', 'asset', 'CNY', 0.0, '记录客户欠款', 'active'),
+                    ('应付账款', 'liability', 'CNY', 0.0, '记录欠供应商款项', 'active'),
+                    ('股本', 'equity', 'CNY', 0.0, '记录公司注册资本', 'active')
                 ]
                 
                 for account in default_accounts:
                     cursor.execute(
-                        "INSERT INTO accounts (name, account_type, balance, description) VALUES (?, ?, ?, ?)",
+                        "INSERT INTO accounts (name, account_type, currency, balance, description, status) VALUES (?, ?, ?, ?, ?, ?)",
                         account
                     )
                 logger.info("创建默认账户成功")
@@ -268,31 +278,31 @@ class DBMigration:
             if cursor.fetchone()[0] == 0:
                 # 创建默认收入分类
                 income_categories = [
-                    ('主营业务收入', 'income', 1, '销售商品或提供服务的收入'),
-                    ('其他业务收入', 'income', 1, '非主营业务的收入'),
-                    ('投资收益', 'income', 1, '投资获得的收益'),
-                    ('营业外收入', 'income', 1, '与生产经营无直接关系的收入')
+                    ('主营业务收入', 'income', None, '💰', '#28a745', 'default', '销售商品或提供服务的收入', 1),
+                    ('其他业务收入', 'income', None, '💵', '#20c997', 'default', '非主营业务的收入', 1),
+                    ('投资收益', 'income', None, '📈', '#6f42c1', 'default', '投资获得的收益', 1),
+                    ('营业外收入', 'income', None, '🎁', '#ffc107', 'default', '与生产经营无直接关系的收入', 1)
                 ]
                 
                 for category in income_categories:
                     cursor.execute(
-                        "INSERT INTO categories (name, category_type, icon, description, is_system) VALUES (?, ?, ?, ?, ?)",
-                        category
+                        "INSERT INTO categories (name, category_type, parent_id, icon, color, description, is_system) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        category[:-1]  # 去掉最后一个元素，因为我们不需要'default'字段
                     )
                 
                 # 创建默认支出分类
                 expense_categories = [
-                    ('主营业务成本', 'expense', 1, '销售商品或提供服务的成本'),
-                    ('销售费用', 'expense', 1, '销售过程中发生的各项费用'),
-                    ('管理费用', 'expense', 1, '企业管理部门发生的费用'),
-                    ('财务费用', 'expense', 1, '筹集生产经营所需资金等发生的费用'),
-                    ('营业外支出', 'expense', 1, '与生产经营无直接关系的支出')
+                    ('主营业务成本', 'expense', None, '📦', '#dc3545', 'default', '销售商品或提供服务的成本', 1),
+                    ('销售费用', 'expense', None, '🏢', '#fd7e14', 'default', '销售过程中发生的各项费用', 1),
+                    ('管理费用', 'expense', None, '⚙️', '#17a2b8', 'default', '企业管理部门发生的费用', 1),
+                    ('财务费用', 'expense', None, '💸', '#6c757d', 'default', '筹集生产经营所需资金等发生的费用', 1),
+                    ('营业外支出', 'expense', None, '❌', '#343a40', 'default', '与生产经营无直接关系的支出', 1)
                 ]
                 
                 for category in expense_categories:
                     cursor.execute(
-                        "INSERT INTO categories (name, category_type, icon, description, is_system) VALUES (?, ?, ?, ?, ?)",
-                        category
+                        "INSERT INTO categories (name, category_type, parent_id, icon, color, description, is_system) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        category[:-1]  # 去掉最后一个元素，因为我们不需要'default'字段
                     )
                 
                 logger.info("创建默认分类成功")
@@ -468,7 +478,7 @@ class DBMigration:
             tables = cursor.fetchall()
             
             schema_sql = """-- 数据库架构导出
--- 导出时间: {}\n\n".format(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+-- 导出时间: {}\n\n""".format(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
             
             # 导出每个表的创建语句
             for table in tables:

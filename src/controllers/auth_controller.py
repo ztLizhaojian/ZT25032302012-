@@ -22,10 +22,7 @@ except ImportError as e:
 # 配置日志
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                    handlers=[
-                        logging.FileHandler(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'logs', 'auth.log'),
-                        logging.StreamHandler()
-                    ])
+                    handlers=[logging.StreamHandler()])
 logger = logging.getLogger("AuthController")
 
 
