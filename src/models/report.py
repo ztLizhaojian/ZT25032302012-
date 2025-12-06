@@ -27,7 +27,8 @@ class ReportModel:
             AND transaction_date >= ? 
             AND transaction_date <= ?
             """
-            income_result = execute_query(income_query, (start_date, end_date), fetch=True)
+            income_results = execute_query(income_query, (start_date, end_date), fetch_all=True)
+            income_result = income_results[0] if income_results else {'total_income': 0}
             total_income = income_result['total_income'] if income_result and income_result['total_income'] else 0
             
             # 查询支出总额
@@ -38,7 +39,8 @@ class ReportModel:
             AND transaction_date >= ? 
             AND transaction_date <= ?
             """
-            expense_result = execute_query(expense_query, (start_date, end_date), fetch=True)
+            expense_results = execute_query(expense_query, (start_date, end_date), fetch_all=True)
+            expense_result = expense_results[0] if expense_results else {'total_expense': 0}
             total_expense = expense_result['total_expense'] if expense_result and expense_result['total_expense'] else 0
             
             # 计算净利润
@@ -50,11 +52,12 @@ class ReportModel:
                 gross_margin = (net_profit / total_income) * 100
             
             # 交易笔数
-            transaction_count = execute_query(
+            count_results = execute_query(
                 "SELECT COUNT(*) as count FROM transactions WHERE transaction_date >= ? AND transaction_date <= ?",
                 (start_date, end_date),
-                fetch=True
-            )['count']
+                fetch_all=True
+            )
+            transaction_count = count_results[0]['count'] if count_results else 0
             
             return {
                 'start_date': start_date,
@@ -103,7 +106,7 @@ class ReportModel:
                 ORDER BY amount DESC
                 """,
                 (start_date, end_date),
-                fetchall=True
+                fetch_all=True
             )
             
             # 查询支出明细
@@ -118,7 +121,7 @@ class ReportModel:
                 ORDER BY amount DESC
                 """,
                 (start_date, end_date),
-                fetchall=True
+                fetch_all=True
             )
             
             # 计算总收入和总支出
@@ -376,7 +379,8 @@ class ReportModel:
             AND transaction_date >= ? 
             AND transaction_date < ?
             """
-            income_result = execute_query(income_query, (start_date, end_date), fetch=True)
+            income_results = execute_query(income_query, (start_date, end_date), fetch_all=True)
+            income_result = income_results[0] if income_results else {'total': 0}
             total_income = income_result['total'] if income_result and income_result['total'] else 0
             
             # 查询支出总额
@@ -387,18 +391,20 @@ class ReportModel:
             AND transaction_date >= ? 
             AND transaction_date < ?
             """
-            expense_result = execute_query(expense_query, (start_date, end_date), fetch=True)
+            expense_results = execute_query(expense_query, (start_date, end_date), fetch_all=True)
+            expense_result = expense_results[0] if expense_results else {'total': 0}
             total_expense = expense_result['total'] if expense_result and expense_result['total'] else 0
             
             # 计算利润
             profit = total_income + total_expense  # expense是负数
             
             # 交易笔数
-            transaction_count = execute_query(
+            count_results = execute_query(
                 "SELECT COUNT(*) as count FROM transactions WHERE transaction_date >= ? AND transaction_date < ?",
                 (start_date, end_date),
-                fetch=True
-            )['count']
+                fetch_all=True
+            )
+            transaction_count = count_results[0]['count'] if count_results else 0
             
             return {
                 'year': year,

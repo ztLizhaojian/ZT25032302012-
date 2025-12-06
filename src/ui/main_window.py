@@ -120,6 +120,9 @@ class MainWindow(QMainWindow):
             report_placeholder.setAlignment(Qt.AlignCenter)
             self.tab_widget.addTab(report_placeholder, "报表分析")
         
+        # 连接组件信号与槽
+        self.connect_components()
+        
         if AccountWidget is not None:
             self.account_widget = AccountWidget(self.user_info)
             self.tab_widget.addTab(self.account_widget, "账户管理")
@@ -271,6 +274,15 @@ class MainWindow(QMainWindow):
         # 设置状态栏
         self.setStatusBar(status_bar)
     
+    def connect_components(self):
+        """连接各个组件的信号与槽"""
+        try:
+            # 连接交易保存与报表更新
+            if TransactionWidget is not None and ReportWidget is not None:
+                self.transaction_widget.data_updated.connect(self.report_widget.update_reports)
+        except Exception as e:
+            print(f"组件连接失败: {str(e)}")
+            
     def create_sidebar(self):
         """创建侧边栏"""
         # 创建侧边栏部件

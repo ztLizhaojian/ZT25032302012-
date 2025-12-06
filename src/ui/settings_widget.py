@@ -205,9 +205,9 @@ class SettingsWidget(QWidget):
         self.account_table.clicked.connect(self.on_account_selected)
         
         # 创建表格模型
-        self.account_model = QStandardItemModel(0, 5)
+        self.account_model = QStandardItemModel(0, 7)
         self.account_model.setHorizontalHeaderLabels([
-            "ID", "账户名称", "账户类型", "期初余额", "备注"
+            "ID", "账户名称", "账户类型", "期初余额", "当前余额", "交易数量", "备注"
         ])
         self.account_table.setModel(self.account_model)
         self.account_table.hideColumn(0)  # 隐藏ID列
@@ -764,7 +764,7 @@ class SettingsWidget(QWidget):
     def load_accounts(self):
         """加载账户数据"""
         try:
-            accounts = execute_query("SELECT * FROM accounts ORDER BY name", fetchall=True)
+            accounts = execute_query("SELECT * FROM accounts ORDER BY name", fetch_all=True)
             
             # 清空表格
             self.account_model.setRowCount(0)
@@ -782,14 +782,44 @@ class SettingsWidget(QWidget):
                 row_items[-1].setEditable(False)
                 
                 # 账户类型
-                row_items.append(QStandardItem(account['type']))
+                row_items.append(QStandardItem(account['account_type']))
                 row_items[-1].setEditable(False)
                 
-                # 期初余额
-                balance_item = QStandardItem(f"¥{account['opening_balance']:.2f}")
+                # 余额
+                balance_item = QStandardItem(f"¥{account['balance']:.2f}")
                 balance_item.setEditable(False)
                 balance_item.setTextAlignment(Qt.AlignRight)
                 row_items.append(balance_item)
+                
+                # 获取账户当前余额和交易统计信息
+                from src.models.transaction import Transaction
+                current_balance = 0
+                transaction_count = 0
+                
+                try:
+                    # 获取账户当前余额
+                    balance_info = Transaction.get_account_transaction_summary(account['id'])
+                    if balance_info and 'current_balance' in balance_info:
+                        current_balance = balance_info['current_balance'] or 0
+                    
+                    # 获取交易数量
+                    count_info = Transaction.get_account_transactions_count(account['id'])
+                    if count_info and 'count' in count_info:
+                        transaction_count = count_info['count'] or 0
+                except Exception as e:
+                    print(f"获取账户交易数据失败: {str(e)}")
+                
+                # 当前余额
+                current_balance_item = QStandardItem(f"¥{current_balance:.2f}")
+                current_balance_item.setEditable(False)
+                current_balance_item.setTextAlignment(Qt.AlignRight)
+                row_items.append(current_balance_item)
+                
+                # 交易数量
+                transaction_count_item = QStandardItem(str(transaction_count))
+                transaction_count_item.setEditable(False)
+                transaction_count_item.setTextAlignment(Qt.AlignCenter)
+                row_items.append(transaction_count_item)
                 
                 # 备注
                 note = account['note'] if account['note'] else ""
@@ -838,8 +868,8 @@ class SettingsWidget(QWidget):
             
             # 添加账户
             execute_query(
-                "INSERT INTO accounts (name, type, opening_balance, note) VALUES (?, ?, ?, ?)",
-                (name, account_type, opening_balance, note)
+                "INSERT INTO accounts (name, account_type, currency, balance, description, status, created_at, updated_at, user_id) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?)",
+                (name, account_type, 'CNY', opening_balance, note, 'active', self.user_info['id'])
             )
             
             # 记录操作日志
@@ -1047,9 +1077,9 @@ class SettingsWidget(QWidget):
             
             # 查询分类数据
             categories = execute_query(
-                "SELECT c.*, p.name as parent_name FROM categories c LEFT JOIN categories p ON c.parent_id = p.id WHERE c.type = ? ORDER BY c.name",
+                "SELECT c.*, p.name as parent_name FROM categories c LEFT JOIN categories p ON c.parent_id = p.id WHERE c.category_type = ? ORDER BY c.name",
                 (db_type,),
-                fetchall=True
+                fetch_all=True
             )
             
             # 清空表格
@@ -1119,7 +1149,7 @@ class SettingsWidget(QWidget):
             
             # 检查分类是否已存在
             existing_category = execute_query(
-                "SELECT id FROM categories WHERE name = ? AND type = ?", 
+                "SELECT id FROM categories WHERE name = ? AND category_type = ?", 
                 (name, db_type), 
                 fetch=True
             )
@@ -1133,7 +1163,7 @@ class SettingsWidget(QWidget):
             parent_id = None
             if parent_name != "无":
                 parent_category = execute_query(
-                    "SELECT id FROM categories WHERE name = ? AND type = ?", 
+                    "SELECT id FROM categories WHERE name = ? AND category_type = ?", 
                     (parent_name, db_type), 
                     fetch=True
                 )
@@ -1142,7 +1172,7 @@ class SettingsWidget(QWidget):
             
             # 添加分类
             execute_query(
-                "INSERT INTO categories (name, code, type, parent_id, note) VALUES (?, ?, ?, ?, ?)",
+                "INSERT INTO categories (name, code, category_type, parent_id, note) VALUES (?, ?, ?, ?, ?)",
                 (name, code, db_type, parent_id, note)
             )
             
@@ -1195,7 +1225,7 @@ class SettingsWidget(QWidget):
             
             # 检查分类名称是否与其他分类重复
             existing_category = execute_query(
-                "SELECT id FROM categories WHERE name = ? AND type = ? AND id != ?", 
+                "SELECT id FROM categories WHERE name = ? AND category_type = ? AND id != ?", 
                 (name, db_type, category_id), 
                 fetch=True
             )
@@ -1209,7 +1239,7 @@ class SettingsWidget(QWidget):
             parent_id = None
             if parent_name != "无":
                 parent_category = execute_query(
-                    "SELECT id FROM categories WHERE name = ? AND type = ?", 
+                    "SELECT id FROM categories WHERE name = ? AND category_type = ?", 
                     (parent_name, db_type), 
                     fetch=True
                 )
@@ -1373,7 +1403,7 @@ class SettingsWidget(QWidget):
     def load_users(self):
         """加载用户数据"""
         try:
-            users = execute_query("SELECT * FROM users ORDER BY id", fetchall=True)
+            users = execute_query("SELECT * FROM users ORDER BY id", fetch_all=True)
             
             # 清空表格
             self.user_model.setRowCount(0)
@@ -1696,7 +1726,7 @@ class SettingsWidget(QWidget):
         """加载系统设置"""
         try:
             # 尝试从数据库加载设置
-            settings = execute_query("SELECT * FROM system_settings WHERE id = 1", fetch=True)
+            settings = execute_query("SELECT * FROM system_settings WHERE id = 1", fetch_all=False)
             
             if settings:
                 # 公司名称
@@ -1742,7 +1772,7 @@ class SettingsWidget(QWidget):
             profit_color = self.profit_color_button.styleSheet().split(':')[-1].strip()
             
             # 检查设置是否存在
-            existing_settings = execute_query("SELECT id FROM system_settings WHERE id = 1", fetch=True)
+            existing_settings = execute_query("SELECT id FROM system_settings WHERE id = 1", fetch_all=False)
             
             if existing_settings:
                 # 更新设置
@@ -1788,7 +1818,7 @@ class SettingsWidget(QWidget):
         """加载备份设置"""
         try:
             # 尝试从数据库加载设置
-            settings = execute_query("SELECT * FROM system_settings WHERE id = 1", fetch=True)
+            settings = execute_query("SELECT * FROM system_settings WHERE id = 1", fetch_all=False)
             
             if settings:
                 # 备份目录
@@ -1902,7 +1932,7 @@ class SettingsWidget(QWidget):
                 os.makedirs(backup_directory)
             
             # 检查设置是否存在
-            existing_settings = execute_query("SELECT id FROM system_settings WHERE id = 1", fetch=True)
+            existing_settings = execute_query("SELECT id FROM system_settings WHERE id = 1", fetch_all=False)
             
             if existing_settings:
                 # 更新设置

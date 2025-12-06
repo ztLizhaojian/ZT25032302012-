@@ -1,0 +1,30 @@
+{
+  "database": {
+    "path": "./test_finance_system.db",
+    "backup": {
+      "enabled": true,
+      "interval_hours": 24,
+      "keep_days": 7,
+      "min_keep": 5,
+      "folder": "./test_backups"
+    }
+  },
+  "logging": {
+    "level": "INFO",
+    "file": "./logs/finance_system.log",
+    "max_bytes": 10485760,
+    "backup_count": 5
+  },
+  "app": {
+    "name": "Finance Management System",
+    "version": "1.0.0",
+    "debug": false,
+    "max_transactions_per_page": 50,
+    "currency_symbol": "¥"
+  },
+  "security": {
+    "password_min_length": 8,
+    "session_timeout_minutes": 30,
+    "allow_guest_access": false
+  }
+}

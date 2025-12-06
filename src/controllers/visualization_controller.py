@@ -26,9 +26,9 @@ except ImportError as e:
 # 导入模型
 try:
     from src.models.transaction import TransactionModel
-    from src.models.report import report_model
-    from src.models.category import category_model
-    from src.models.account import account_model
+    from src.models.report import ReportModel
+    from src.models.category import CategoryModel
+    from src.models.account import AccountModel
     MODELS_READY = True
 except ImportError as e:
     logging.error(f"导入模型失败: {str(e)}")
@@ -55,9 +55,9 @@ class VisualizationController:
         初始化数据可视化控制器
         """
         self.transaction_model = TransactionModel if MODELS_READY else None
-        self.report_model = report_model if MODELS_READY else None
-        self.category_model = category_model if MODELS_READY else None
-        self.account_model = account_model if MODELS_READY else None
+        self.report_model = ReportModel if MODELS_READY else None
+        self.category_model = CategoryModel if MODELS_READY else None
+        self.account_model = AccountModel if MODELS_READY else None
         
         # 设置中文字体支持
         if VISUALIZATION_READY:
@@ -113,10 +113,10 @@ class VisualizationController:
             # 按日期和类型分组
             if not df.empty:
                 # 确保日期格式正确
-                df['date'] = pd.to_datetime(df['date'])
+                df['transaction_date'] = pd.to_datetime(df['transaction_date'])
                 
                 # 按天和类型分组
-                daily_summary = df.groupby([df['date'].dt.date, 'type'])['amount'].sum().unstack(fill_value=0)
+                daily_summary = df.groupby([df['transaction_date'].dt.date, 'transaction_type'])['amount'].sum().unstack(fill_value=0)
                 
                 # 准备图表数据
                 dates = daily_summary.index
@@ -328,18 +328,18 @@ class VisualizationController:
             # 按时间间隔分组
             if not df.empty:
                 # 确保日期格式正确
-                df['date'] = pd.to_datetime(df['date'])
+                df['transaction_date'] = pd.to_datetime(df['transaction_date'])
                 
                 # 设置时间间隔
                 if interval == 'day':
-                    grouper = df['date'].dt.date
+                    grouper = df['transaction_date'].dt.date
                 elif interval == 'week':
-                    grouper = df['date'].dt.to_period('W').dt.to_timestamp()
+                    grouper = df['transaction_date'].dt.to_period('W').dt.to_timestamp()
                 else:  # month
-                    grouper = df['date'].dt.to_period('M').dt.to_timestamp()
+                    grouper = df['transaction_date'].dt.to_period('M').dt.to_timestamp()
                 
                 # 按时间间隔和类型分组
-                time_summary = df.groupby([grouper, 'type'])['amount'].sum().unstack(fill_value=0)
+                time_summary = df.groupby([grouper, 'transaction_type'])['amount'].sum().unstack(fill_value=0)
                 
                 # 准备趋势图数据
                 time_points = time_summary.index
@@ -621,8 +621,8 @@ class VisualizationController:
             if random.random() > 0.3:  # 70%概率有收入
                 transactions.append({
                     'id': len(transactions) + 1,
-                    'date': current_date.strftime('%Y-%m-%d'),
-                    'type': 'income',
+                    'transaction_date': current_date.strftime('%Y-%m-%d'),
+                    'transaction_type': 'income',
                     'amount': random.randint(20000, 80000),
                     'category_id': random.randint(1, 3),
                     'category_name': random.choice(income_categories),
@@ -635,8 +635,8 @@ class VisualizationController:
             for _ in range(random.randint(1, 3)):
                 transactions.append({
                     'id': len(transactions) + 1,
-                    'date': current_date.strftime('%Y-%m-%d'),
-                    'type': 'expense',
+                    'transaction_date': current_date.strftime('%Y-%m-%d'),
+                    'transaction_type': 'expense',
                     'amount': random.randint(1000, 30000),
                     'category_id': random.randint(4, 9),
                     'category_name': random.choice(expense_categories),

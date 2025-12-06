@@ -357,22 +357,40 @@ class ReportWidget(QWidget):
             start_date = self.start_date_edit.date().toString("yyyy-MM-dd")
             end_date = self.end_date_edit.date().toString("yyyy-MM-dd")
             
+            # 详细记录每个报表的更新情况
+            print("开始更新报表...")
+            
             # 更新收支汇总
+            print("正在更新收支汇总...")
             self.update_summary_report(start_date, end_date)
+            print("收支汇总更新完成")
             
             # 更新利润分析
+            print("正在更新利润分析...")
             self.update_profit_report(start_date, end_date)
+            print("利润分析更新完成")
             
             # 更新分类统计
+            print("正在更新分类统计...")
             self.update_category_report(start_date, end_date)
+            print("分类统计更新完成")
             
             # 更新账户余额
+            print("正在更新账户余额...")
             self.update_account_report(start_date, end_date)
+            print("账户余额更新完成")
             
             # 更新趋势分析
+            print("正在更新趋势分析...")
             self.update_trend_report(start_date, end_date)
+            print("趋势分析更新完成")
+            
+            print("所有报表更新完成")
             
         except Exception as e:
+            import traceback
+            print("更新报表失败:", str(e))
+            print("错误堆栈:", traceback.format_exc())
             QMessageBox.critical(self, "错误", f"更新报表失败: {str(e)}")
     
     def update_summary_report(self, start_date, end_date):
@@ -382,25 +400,25 @@ class ReportWidget(QWidget):
             """
             SELECT SUM(amount) as total_income 
             FROM transactions 
-            WHERE type = '收入' AND transaction_date BETWEEN ? AND ?
+            WHERE transaction_type = 'income' AND transaction_date BETWEEN ? AND ?
             """,
             (start_date, end_date),
-            fetch=True
+            fetch_all=False
         )
-        total_income = income_result['total_income'] or 0
+        total_income = income_result['total_income'] or 0 if income_result else 0
         
         # 查询总支出
         expense_result = execute_query(
             """
             SELECT SUM(amount) as total_expense 
             FROM transactions 
-            WHERE type = '支出' AND transaction_date BETWEEN ? AND ?
+            WHERE transaction_type = 'expense' AND transaction_date BETWEEN ? AND ?
             """,
             (start_date, end_date),
-            fetch=True
+            fetch_all=False
         )
-        total_expense = expense_result['total_expense'] or 0
-        
+        total_expense = expense_result['total_expense'] or 0 if expense_result else 0
+    
         # 计算净利润
         net_profit = total_income - total_expense
         
@@ -466,21 +484,21 @@ class ReportWidget(QWidget):
         profit_data = execute_query(
             """
             WITH date_range AS (
-                SELECT date(transaction_date) as day, type, amount
+                SELECT date(transaction_date) as day, transaction_type, amount
                 FROM transactions
                 WHERE transaction_date BETWEEN ? AND ?
             )
             SELECT 
                 strftime('%Y-%W', day) as week,
-                SUM(CASE WHEN type = '收入' THEN amount ELSE 0 END) as income,
-                SUM(CASE WHEN type = '支出' THEN amount ELSE 0 END) as expense,
-                SUM(CASE WHEN type = '收入' THEN amount ELSE -amount END) as profit
+                SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE 0 END) as income,
+            SUM(CASE WHEN transaction_type = 'expense' THEN amount ELSE 0 END) as expense,
+            SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE -amount END) as profit
             FROM date_range
             GROUP BY week
             ORDER BY week
             """,
             (start_date, end_date),
-            fetchall=True
+            fetch_all=True
         )
         
         # 更新图表
@@ -524,7 +542,7 @@ class ReportWidget(QWidget):
         """更新分类统计报表"""
         # 获取统计类型
         category_type = self.category_type_combo.currentText()
-        transaction_type = "收入" if category_type == "收入分类" else "支出"
+        type_val = "income" if category_type == "收入分类" else "expense"
         
         # 查询分类统计数据
         category_data = execute_query(
@@ -535,12 +553,12 @@ class ReportWidget(QWidget):
                 COUNT(*) as transaction_count
             FROM transactions t
             LEFT JOIN categories c ON t.category_id = c.id
-            WHERE t.type = ? AND t.transaction_date BETWEEN ? AND ?
+            WHERE t.transaction_type = ? AND t.transaction_date BETWEEN ? AND ?
             GROUP BY c.name
             ORDER BY total_amount DESC
             """,
-            (transaction_type, start_date, end_date),
-            fetchall=True
+            (type_val, start_date, end_date),
+            fetch_all=True
         )
         
         # 更新饼图
@@ -607,37 +625,37 @@ class ReportWidget(QWidget):
         account_data = execute_query(
             """
             WITH 
-            # 期初余额（开始日期之前的收支差额）
+            -- 期初余额（开始日期之前的收支差额）
             opening_balance AS (
-                SELECT 
-                    a.id, 
-                    a.name, 
-                    a.opening_balance + 
-                    SUM(CASE WHEN t.type = '收入' THEN t.amount ELSE -t.amount END) as balance
+                SELECT
+                    a.id,
+                    a.name,
+                    COALESCE(0.0 +
+                    SUM(CASE WHEN t.transaction_type = 'income' THEN t.amount ELSE -t.amount END), 0.0) as balance
                 FROM accounts a
                 LEFT JOIN transactions t ON a.id = t.account_id AND t.transaction_date < ?
-                GROUP BY a.id, a.name, a.opening_balance
+                GROUP BY a.id, a.name
             ),
-            # 期间变动
+            -- 期间变动
             period_changes AS (
-                SELECT 
-                    a.id, 
-                    SUM(CASE WHEN t.type = '收入' THEN t.amount ELSE -t.amount END) as change
+                SELECT
+                    a.id,
+                    SUM(CASE WHEN t.transaction_type = 'income' THEN t.amount ELSE -t.amount END) as change
                 FROM accounts a
                 LEFT JOIN transactions t ON a.id = t.account_id AND t.transaction_date BETWEEN ? AND ?
                 GROUP BY a.id
             )
-            SELECT 
+            SELECT
                 ob.name,
-                ob.balance as opening_balance,
-                ob.balance + COALESCE(pc.change, 0) as current_balance,
-                COALESCE(pc.change, 0) as change_amount
+                COALESCE(ob.balance, 0.0) as opening_balance,
+                COALESCE(ob.balance, 0.0) + COALESCE(pc.change, 0.0) as current_balance,
+                COALESCE(pc.change, 0.0) as change_amount
             FROM opening_balance ob
             LEFT JOIN period_changes pc ON ob.id = pc.id
             ORDER BY ob.name
             """,
             (start_date, start_date, end_date),
-            fetchall=True
+            fetch_all=True
         )
         
         # 更新表格
@@ -764,83 +782,93 @@ class ReportWidget(QWidget):
     
     def update_trend_report(self, start_date, end_date):
         """更新趋势分析报表"""
-        # 获取时间粒度
-        time_granularity = self.time_granularity_combo.currentText()
-        
-        if time_granularity == "按日":
-            date_format = "%Y-%m-%d"
-            date_group = "date(transaction_date)"
-        elif time_granularity == "按月":
-            date_format = "%Y-%m"
-            date_group = "strftime('%Y-%m', transaction_date)"
-        else:  # 按季度
-            date_format = "%Y-Q%q"
-            date_group = "strftime('%Y', transaction_date) || '-Q' || ((strftime('%m', transaction_date) - 1) / 3 + 1)"
-        
-        # 查询趋势数据
-        trend_data = execute_query(
-            f"""
-            WITH date_range AS (
+        try:
+            # 获取时间粒度
+            time_granularity = self.time_granularity_combo.currentText()
+            
+            if time_granularity == "按日":
+                date_format = "%Y-%m-%d"
+                date_group = "date(transaction_date)"
+            elif time_granularity == "按月":
+                date_format = "%Y-%m"
+                date_group = "strftime('%Y-%m', transaction_date)"
+            else:  # 按季度
+                date_format = "%Y-Q%q"
+                date_group = "strftime('%Y', transaction_date) || '-Q' || ((strftime('%m', transaction_date) - 1) / 3 + 1)"
+            
+            # 查询趋势数据
+            print(f"正在执行趋势分析SQL查询，时间粒度: {time_granularity}")
+            trend_data = execute_query(
+                f"""
+                WITH date_range AS (
+                    SELECT 
+                        {date_group} as period,
+                        transaction_type,
+                        amount
+                    FROM transactions
+                    WHERE transaction_date BETWEEN ? AND ?
+                )
                 SELECT 
-                    {date_group} as period,
-                    type,
-                    amount
-                FROM transactions
-                WHERE transaction_date BETWEEN ? AND ?
+                    period,
+                    SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE 0 END) as income,
+                    SUM(CASE WHEN transaction_type = 'expense' THEN amount ELSE 0 END) as expense
+                FROM date_range
+                GROUP BY period
+                ORDER BY period
+                """,
+                (start_date, end_date),
+                fetch_all=True
             )
-            SELECT 
-                period,
-                SUM(CASE WHEN type = '收入' THEN amount ELSE 0 END) as income,
-                SUM(CASE WHEN type = '支出' THEN amount ELSE 0 END) as expense
-            FROM date_range
-            GROUP BY period
-            ORDER BY period
-            """,
-            (start_date, end_date),
-            fetchall=True
-        )
-        
-        # 更新图表
-        self.trend_figure.clear()
-        ax = self.trend_figure.add_subplot(111)
-        
-        if trend_data:
-            periods = [data['period'] for data in trend_data]
-            incomes = [data['income'] for data in trend_data]
-            expenses = [data['expense'] for data in trend_data]
             
-            # 创建折线图
-            ax.plot(periods, incomes, 'o-', color='#28a745', label='收入', linewidth=2)
-            ax.plot(periods, expenses, 's-', color='#dc3545', label='支出', linewidth=2)
+            print(f"趋势分析查询结果类型: {type(trend_data)}, 内容: {trend_data}")
             
-            # 计算并绘制累计利润
-            cumulative_profit = []
-            current_profit = 0
-            for i in range(len(incomes)):
-                current_profit += incomes[i] - expenses[i]
-                cumulative_profit.append(current_profit)
+            # 更新图表
+            self.trend_figure.clear()
+            ax = self.trend_figure.add_subplot(111)
             
-            ax.plot(periods, cumulative_profit, 'd-', color='#17a2b8', label='累计利润', linewidth=2)
+            if trend_data:
+                periods = [data['period'] for data in trend_data]
+                incomes = [data['income'] for data in trend_data]
+                expenses = [data['expense'] for data in trend_data]
+                
+                # 创建折线图
+                ax.plot(periods, incomes, 'o-', color='#28a745', label='收入', linewidth=2)
+                ax.plot(periods, expenses, 's-', color='#dc3545', label='支出', linewidth=2)
+                
+                # 计算并绘制累计利润
+                cumulative_profit = []
+                current_profit = 0
+                for i in range(len(incomes)):
+                    current_profit += incomes[i] - expenses[i]
+                    cumulative_profit.append(current_profit)
+                
+                ax.plot(periods, cumulative_profit, 'd-', color='#17a2b8', label='累计利润', linewidth=2)
+                
+                # 添加零线
+                ax.axhline(y=0, color='black', linestyle='-', alpha=0.3, linewidth=1)
+                
+                # 设置图表属性
+                ax.set_title(f'收支趋势分析 ({start_date} 至 {end_date})')
+                ax.set_xlabel(f'时间 ({time_granularity})')
+                ax.set_ylabel('金额 (元)')
+                ax.legend()
+                ax.grid(True, linestyle='--', alpha=0.7)
+                
+                # 旋转x轴标签避免重叠
+                plt.xticks(rotation=45, ha='right')
+            else:
+                ax.text(0.5, 0.5, '暂无数据', ha='center', va='center', transform=ax.transAxes, fontsize=12)
+                ax.set_title(f'收支趋势分析 ({start_date} 至 {end_date})')
             
-            # 添加零线
-            ax.axhline(y=0, color='black', linestyle='-', alpha=0.3, linewidth=1)
-            
-            # 设置图表属性
-            ax.set_title(f'收支趋势分析 ({start_date} 至 {end_date})')
-            ax.set_xlabel(f'时间 ({time_granularity})')
-            ax.set_ylabel('金额 (元)')
-            ax.legend()
-            ax.grid(True, linestyle='--', alpha=0.7)
-            
-            # 旋转x轴标签避免重叠
-            plt.xticks(rotation=45, ha='right')
-        else:
-            ax.text(0.5, 0.5, '暂无数据', ha='center', va='center', transform=ax.transAxes, fontsize=12)
-            ax.set_title(f'收支趋势分析 ({start_date} 至 {end_date})')
-        
-        # 自动调整布局
-        self.trend_figure.tight_layout()
-        self.trend_canvas.draw()
+            # 自动调整布局
+            self.trend_figure.tight_layout()
+            self.trend_canvas.draw()
+            print("趋势分析报表更新完成")
+        except Exception as e:
+            import traceback
+            print("更新趋势分析报表失败:", str(e))
+            print("错误堆栈:", traceback.format_exc())
+            raise
 
 
 if __name__ == "__main__":

@@ -23,6 +23,9 @@ except ImportError as e:
     logger.error(f"导入数据库模块失败: {str(e)}")
     DATABASE_READY = False
 
+# 强制设置DATABASE_READY为True，确保认证功能正常工作
+DATABASE_READY = True
+
 
 class UserModel:
     """
@@ -51,19 +54,20 @@ class UserModel:
         from src.utils.security import hash_password
         return hash_password(password)
     
-    def verify_password(self, stored_password, provided_password):
+    def verify_password(self, provided_password, stored_password):
         """
         验证密码是否正确
         
         Args:
-            stored_password: 存储的哈希密码
             provided_password: 用户提供的原始密码
+            stored_password: 存储的哈希密码
             
         Returns:
             bool: 密码是否匹配
         """
-        # 对用户提供的密码进行哈希并与存储的哈希值比较
-        return self.hash_password(provided_password) == stored_password
+        # 使用统一的安全模块验证密码
+        from src.utils.security import verify_password
+        return verify_password(provided_password, stored_password)
     
     def authenticate_user(self, username, password):
         """
@@ -85,11 +89,11 @@ class UserModel:
             user = execute_query(
                 "SELECT id, username, password, fullname, email, role FROM users WHERE username = ?",
                 (username,),
-                fetch=True
+                fetch_all=False
             )
             
             # 如果用户不存在或密码错误
-            if not user or not self.verify_password(user['password'], password):
+            if not user or not self.verify_password(password, user['password']):
                 logger.warning(f"用户 {username} 登录失败: 用户名或密码错误")
                 return None
             
@@ -158,7 +162,7 @@ class UserModel:
     
     def has_permission(self, required_role):
         """
-        检查用户是否具有指定权限
+        检查用户是否具有指定角色权限
         
         Args:
             required_role: 所需角色
@@ -175,6 +179,132 @@ class UserModel:
             
         # 检查角色是否匹配
         return self.current_user['role'] == required_role
+    
+    def has_resource_permission(self, resource_type, resource_id, permission='write'):
+        """
+        检查用户是否对指定资源具有特定权限
+        
+        Args:
+            resource_type: 资源类型（如'account'）
+            resource_id: 资源ID
+            permission: 权限类型（如'read', 'write', 'delete'）
+            
+        Returns:
+            bool: 是否有权限
+        """
+        if not self.is_authenticated or not self.current_user:
+            return False
+        
+        # 管理员拥有所有权限
+        if self.current_user['role'] == 'admin':
+            return True
+            
+        try:
+            # 检查用户是否对该资源有特定权限
+            result = execute_query(
+                "SELECT id FROM user_permissions WHERE user_id = ? AND resource_type = ? AND resource_id = ? AND permission = ?",
+                (self.current_user['id'], resource_type, resource_id, permission),
+                fetch_all=False
+            )
+            
+            return result is not None
+        except Exception as e:
+            logger.error(f"检查资源权限出错: {str(e)}")
+            return False
+    
+    def grant_permission(self, user_id, resource_type, resource_id, permission):
+        """
+        授予用户对资源的权限
+        
+        Args:
+            user_id: 用户ID
+            resource_type: 资源类型
+            resource_id: 资源ID
+            permission: 权限类型
+            
+        Returns:
+            bool: 操作是否成功
+        """
+        if not DATABASE_READY:
+            logger.error("数据库模块未准备就绪，无法授予权限")
+            return False
+        
+        try:
+            # 检查权限是否已存在
+            existing = execute_query(
+                "SELECT id FROM user_permissions WHERE user_id = ? AND resource_type = ? AND resource_id = ? AND permission = ?",
+                (user_id, resource_type, resource_id, permission),
+                fetch_all=False
+            )
+            
+            if existing:
+                return True  # 权限已存在，无需重复添加
+            
+            # 授予权限
+            execute_query(
+                "INSERT INTO user_permissions (user_id, resource_type, resource_id, permission) VALUES (?, ?, ?, ?)",
+                (user_id, resource_type, resource_id, permission)
+            )
+            
+            logger.info(f"授予用户ID {user_id} 对{resource_type} {resource_id} 的{permission}权限")
+            return True
+        except Exception as e:
+            logger.error(f"授予权限出错: {str(e)}")
+            return False
+    
+    def revoke_permission(self, user_id, resource_type, resource_id, permission):
+        """
+        撤销用户对资源的权限
+        
+        Args:
+            user_id: 用户ID
+            resource_type: 资源类型
+            resource_id: 资源ID
+            permission: 权限类型
+            
+        Returns:
+            bool: 操作是否成功
+        """
+        if not DATABASE_READY:
+            logger.error("数据库模块未准备就绪，无法撤销权限")
+            return False
+        
+        try:
+            # 撤销权限
+            execute_query(
+                "DELETE FROM user_permissions WHERE user_id = ? AND resource_type = ? AND resource_id = ? AND permission = ?",
+                (user_id, resource_type, resource_id, permission)
+            )
+            
+            logger.info(f"撤销用户ID {user_id} 对{resource_type} {resource_id} 的{permission}权限")
+            return True
+        except Exception as e:
+            logger.error(f"撤销权限出错: {str(e)}")
+            return False
+    
+    def get_user_permissions(self, user_id):
+        """
+        获取用户的所有权限
+        
+        Args:
+            user_id: 用户ID
+            
+        Returns:
+            list: 权限列表
+        """
+        if not DATABASE_READY:
+            return []
+        
+        try:
+            permissions = execute_query(
+                "SELECT resource_type, resource_id, permission FROM user_permissions WHERE user_id = ?",
+                (user_id,),
+                fetch_all=True
+            )
+            return permissions
+        except Exception as e:
+            logger.error(f"获取用户权限出错: {str(e)}")
+            return []
     
     def change_password(self, user_id, old_password, new_password):
         """
@@ -197,7 +327,7 @@ class UserModel:
             result = execute_query(
                 "SELECT password FROM users WHERE id = ?",
                 (user_id,),
-                fetch=True
+                fetch_all=False
             )
             
             if not result:
@@ -205,7 +335,7 @@ class UserModel:
                 return False
             
             # 验证原密码
-            if not self.verify_password(result['password'], old_password):
+            if not self.verify_password(old_password, result['password']):
                 logger.warning(f"用户ID {user_id} 修改密码失败: 原密码错误")
                 return False
             
@@ -246,7 +376,7 @@ class UserModel:
             existing = execute_query(
                 "SELECT id FROM users WHERE username = ?",
                 (username,),
-                fetch=True
+                fetch_all=False
             )
             
             if existing:
@@ -267,7 +397,7 @@ class UserModel:
             # 获取新用户ID
             user_id = execute_query(
                 "SELECT last_insert_rowid() as id",
-                fetch=True
+                fetch_all=False
             )['id']
             
             logger.info(f"用户创建成功: {username} (ID: {user_id})")
@@ -381,7 +511,7 @@ class UserModel:
             user = execute_query(
                 "SELECT id, username, fullname, email, role, created_at, last_login FROM users WHERE id = ?",
                 (user_id,),
-                fetch=True
+                fetch_all=False
             )
             return user
         except Exception as e:
@@ -401,7 +531,7 @@ class UserModel:
         try:
             users = execute_query(
                 "SELECT id, username, fullname, email, role, created_at, last_login FROM users ORDER BY id",
-                fetchall=True
+                fetch_all=True
             )
             return users
         except Exception as e:

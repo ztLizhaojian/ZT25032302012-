@@ -1,0 +1,58 @@
+{
+  "start_time": "2025-11-30T16:43:14.938759",
+  "end_time": "2025-11-30T16:43:14.941540",
+  "duration": 0.002781,
+  "total_tests": 8,
+  "passed_tests": 2,
+  "failed_tests": 6,
+  "test_cases": [
+    {
+      "name": "数据库连接测试",
+      "status": "failed",
+      "message": "数据库连接失败: 'NoneType' object is not subscriptable",
+      "timestamp": "2025-11-30T16:43:14.938924"
+    },
+    {
+      "name": "用户管理测试",
+      "status": "failed",
+      "message": "用户管理测试失败: UserModel.create_user() missing 1 required positional argument: 'fullname'",
+      "timestamp": "2025-11-30T16:43:14.939081"
+    },
+    {
+      "name": "账户管理测试",
+      "status": "failed",
+      "message": "账户管理测试失败: 'NoneType' object is not iterable",
+      "timestamp": "2025-11-30T16:43:14.939273"
+    },
+    {
+      "name": "分类管理测试",
+      "status": "failed",
+      "message": "分类管理测试失败: 'NoneType' object is not iterable",
+      "timestamp": "2025-11-30T16:43:14.939491"
+    },
+    {
+      "name": "交易管理测试",
+      "status": "failed",
+      "message": "交易管理测试失败: TransactionModel.create_transaction() got an unexpected keyword argument 'amount'",
+      "timestamp": "2025-11-30T16:43:14.939690"
+    },
+    {
+      "name": "报表生成测试",
+      "status": "passed",
+      "message": "月度汇总、利润表、资产负债表生成成功",
+      "timestamp": "2025-11-30T16:43:14.939948"
+    },
+    {
+      "name": "设置管理测试",
+      "status": "passed",
+      "message": "设置获取和更新功能正常",
+      "timestamp": "2025-11-30T16:43:14.941365"
+    },
+    {
+      "name": "系统性能测试",
+      "status": "failed",
+      "message": "性能测试失败: name 'report_model' is not defined",
+      "timestamp": "2025-11-30T16:43:14.941538"
+    }
+  ]
+}

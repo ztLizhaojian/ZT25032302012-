@@ -146,16 +146,20 @@ class CategoryWidget(QWidget):
             self.category_model.removeRows(0, self.category_model.rowCount())
             
             # 查询分类数据
-            query = "SELECT id, name, type, description FROM categories ORDER BY id"
-            rows = execute_query(query)
+            query = "SELECT id, name, category_type, description FROM categories ORDER BY id"
+            rows = execute_query(query, fetch_all=True)
             
             # 填充表格数据
             for row_data in rows:
                 items = []
-                for i, data in enumerate(row_data):
-                    item = QStandardItem(str(data))
+                # 按顺序获取需要的字段值
+                items.append(QStandardItem(str(row_data['id'])))
+                items.append(QStandardItem(str(row_data['name'])))
+                items.append(QStandardItem(str(row_data['category_type'])))
+                items.append(QStandardItem(str(row_data['description'])))
+                # 设置文本居中
+                for item in items:
                     item.setTextAlignment(Qt.AlignCenter)
-                    items.append(item)
                 self.category_model.appendRow(items)
                 
         except Exception as e:
@@ -168,11 +172,11 @@ class CategoryWidget(QWidget):
             name, category_type, description = dialog.get_data()
             try:
                 # 插入新分类
-                query = "INSERT INTO categories (name, type, description) VALUES (?, ?, ?)"
-                execute_query(query, (name, category_type, description), commit=True)
+                query = "INSERT INTO categories (name, category_type, description) VALUES (?, ?, ?)"
+                execute_query(query, (name, category_type, description))
                 
                 # 记录操作日志
-                log_operation(self.user_info['id'], f"添加分类: {name}")
+                log_operation(self.user_info['id'], "添加分类", f"添加了分类: {name}")
                 
                 # 刷新数据
                 self.load_categories()
@@ -201,11 +205,11 @@ class CategoryWidget(QWidget):
             name, category_type, description = dialog.get_data()
             try:
                 # 更新分类信息
-                query = "UPDATE categories SET name=?, type=?, description=? WHERE id=?"
-                execute_query(query, (name, category_type, description, category_id), commit=True)
+                query = "UPDATE categories SET name=?, category_type=?, description=? WHERE id=?"
+                execute_query(query, (name, category_type, description, category_id))
                 
                 # 记录操作日志
-                log_operation(self.user_info['id'], f"修改分类: {category_name} -> {name}")
+                log_operation(self.user_info['id'], "修改分类", f"修改分类: {category_name} -> {name}")
                 
                 # 刷新数据
                 self.load_categories()
@@ -233,10 +237,10 @@ class CategoryWidget(QWidget):
             try:
                 # 删除分类
                 query = "DELETE FROM categories WHERE id=?"
-                execute_query(query, (category_id,), commit=True)
+                execute_query(query, (category_id,))
                 
                 # 记录操作日志
-                log_operation(self.user_info['id'], f"删除分类: {category_name}")
+                log_operation(self.user_info['id'], "删除分类", f"删除了分类: {category_name}")
                 
                 # 刷新数据
                 self.load_categories()

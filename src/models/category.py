@@ -186,7 +186,7 @@ class CategoryModel:
             # 添加过滤条件
             if filters:
                 if 'category_type' in filters and filters['category_type']:
-                    query += " AND category_type = ?"
+                    query += " AND type = ?"
                     params.append(filters['category_type'])
                 
                 if 'status' in filters and filters['status']:
@@ -208,7 +208,7 @@ class CategoryModel:
             query += " ORDER BY name"
             
             # 执行查询
-            results = execute_query(query, params, fetchall=True)
+            results = execute_query(query, params, fetch_all=True)
             
             return results
             
@@ -237,7 +237,7 @@ class CategoryModel:
             
             query += " ORDER BY name"
             
-            results = execute_query(query, params, fetchall=True)
+            results = execute_query(query, params, fetch_all=True)
             
             return results
             

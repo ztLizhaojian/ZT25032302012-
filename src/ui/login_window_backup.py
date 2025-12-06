@@ -449,7 +449,7 @@ class LoginWindow(QMainWindow):
                 )
                 
                 # 记录登录日志
-                log_operation(user['id'], 'login', f'用户 {username} 登录系统')
+                log_operation(user['id'], 'login', f'用户 {username} 登录系统', None)
                 
                 # 保存当前用户信息
                 self.current_user = {
@@ -469,7 +469,7 @@ class LoginWindow(QMainWindow):
                 self.password_edit.setFocus()
                 
                 # 记录失败日志
-                log_operation(None, 'login_failed', f'尝试使用用户名 {username} 登录失败')
+                log_operation(None, 'login_failed', f'尝试使用用户名 {username} 登录失败', None)
                 
         except Exception as e:
             QMessageBox.critical(self, "登录错误", f"登录过程中发生错误: {str(e)}")

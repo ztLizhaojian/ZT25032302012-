@@ -13,14 +13,15 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QRect
 from PyQt5.QtGui import QFont, QPixmap, QIcon
-from src.database.db_manager import init_db, execute_query, get_db_path
-from src.utils.security import hash_password, verify_password
+from src.database.db_manager import init_db, get_db_path
+from src.controllers.auth_controller import AuthController
 from src.ui.main_window import MainWindow
 
 class LoginWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.current_user = None
+        self.auth_controller = AuthController()
         self.init_db()
         self.init_ui()
     
@@ -495,25 +496,22 @@ class LoginWindow(QMainWindow):
         self.login_button.setText("登录中...")
         
         try:
-            # 验证用户凭据
-            user = execute_query(
-                "SELECT id, username, password, fullname, role FROM users WHERE username = ?",
-                (username,),
-                fetch=True
-            )
+            # 使用认证控制器验证用户凭据
+            result = self.auth_controller.login(username, password)
             
-            if user and verify_password(password, user['password']):
+            if result['success']:
+                # 登录成功，获取用户信息
                 self.current_user = {
-                    'id': user['id'],
-                    'username': user['username'],
-                    'fullname': user['fullname'] if user['fullname'] else user['username'],  # 如果没有全名，使用用户名
-                    'role': user['role'] if user['role'] else 'user'       # 如果没有角色，默认为普通用户
+                    'id': result['user']['id'],
+                    'username': result['user']['username'],
+                    'fullname': result['user']['fullname'] if result['user'].get('fullname') else result['user']['username'],
+                    'role': result['user']['role'] if result['user'].get('role') else 'user'
                 }
                 print(f"用户 {username} 登录成功")
                 self.accept_login()
             else:
-                print(f"登录失败: 用户名或密码错误")
-                self.show_validation_error(self.username_edit, "用户名或密码错误")
+                print(f"登录失败: {result.get('message', '用户名或密码错误')}")
+                self.show_validation_error(self.username_edit, result.get('message', '用户名或密码错误'))
         except Exception as e:
             print(f"登录过程中发生错误: {str(e)}")
             QMessageBox.critical(self, "错误", f"登录过程中发生错误: {str(e)}")

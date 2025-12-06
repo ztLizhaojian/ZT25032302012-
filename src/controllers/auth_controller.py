@@ -11,9 +11,11 @@ import os
 
 try:
     # 导入用户模型
-    from src.models.user import user_model
+    from src.models.user_model import UserModel
     # 导入数据库管理器
     from src.database.db_manager import log_operation
+    # 初始化用户模型实例
+    user_model = UserModel()
     DATABASE_READY = True
 except ImportError as e:
     logging.error(f"导入模块失败: {str(e)}")
@@ -71,18 +73,18 @@ class AuthController:
         
         try:
             # 调用用户模型进行身份验证
-            user = self.user_model.authenticate_user(username, password)
+            auth_result = self.user_model.authenticate_user(username, password)
             
-            if user:
+            if auth_result and auth_result.get('success'):
                 # 登录成功，重置失败尝试计数
                 self.failed_attempts = 0
-                self.current_user = user
+                self.current_user = auth_result['user']
                 self.is_authenticated = True
                 
                 # 记录登录日志
                 if DATABASE_READY:
                     log_operation(
-                        user_id=user['id'],
+                        user_id=auth_result['user']['id'],
                         action="login",
                         details=f"用户登录成功，记住我: {remember_me}",
                         ip_address=ip_address
@@ -92,8 +94,8 @@ class AuthController:
                 
                 return {
                     "success": True,
-                    "message": "登录成功",
-                    "user": user
+                    "message": auth_result.get('message', "登录成功"),
+                    "user": auth_result['user']
                 }
             else:
                 # 登录失败
@@ -114,7 +116,7 @@ class AuthController:
                     
                 return {
                     "success": False,
-                    "message": "用户名或密码错误",
+                    "message": auth_result.get('message', "用户名或密码错误") if auth_result else "用户名或密码错误",
                     "user": None
                 }
                 

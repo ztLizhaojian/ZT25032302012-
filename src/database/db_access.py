@@ -2,6 +2,7 @@
 import sqlite3
 import json
 import logging
+import os
 from typing import List, Dict, Any, Optional, Union, Tuple
 from datetime import datetime
 
@@ -10,6 +11,9 @@ logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("DBAccess")
 
+# 数据库文件路径 - 与db_manager保持一致
+DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 
+                      'data', 'finance_system.db')
 
 class DBAccess:
     """数据访问类，提供统一的数据库操作接口"""
@@ -62,7 +66,7 @@ class DBAccess:
             logger.error(f"关闭数据库连接失败: {str(e)}")
             return False
     
-    def execute_query(self, query: str, params: Optional[Tuple] = None, fetch: bool = False, 
+    def execute_query(self, query: str, params: Optional[Tuple] = None, 
                      fetch_all: bool = False) -> Union[Dict[str, Any], List[Dict[str, Any]], int, None]:
         """
         执行SQL查询
@@ -70,13 +74,12 @@ class DBAccess:
         Args:
             query: SQL查询语句
             params: 查询参数
-            fetch: 是否返回单条记录
-            fetch_all: 是否返回所有记录
+            fetch_all: 是否返回所有记录（True返回列表，False返回单条）
             
         Returns:
-            当fetch=True时返回单条记录（字典）
+            当fetch_all=False时返回单条记录（字典）
             当fetch_all=True时返回多条记录（字典列表）
-            否则返回影响的行数
+            对于INSERT/UPDATE/DELETE等修改操作，返回影响的行数
         """
         try:
             # 确保连接已建立
@@ -90,22 +93,42 @@ class DBAccess:
                 self.cursor.execute(query)
             
             # 根据需求返回结果
-            if fetch:
-                result = self.cursor.fetchone()
-                if result:
-                    return dict(result)
-                return None
-            elif fetch_all:
-                results = self.cursor.fetchall()
-                return [dict(row) for row in results]
+            # 检查是否为SELECT语句（包括以WITH开头的CTE查询）
+            # 移除所有前导空白和注释，然后检查是否以SELECT或WITH开头
+            cleaned_query = query.strip()
+            while cleaned_query.startswith('--'):
+                # 移除单行注释
+                cleaned_query = cleaned_query[cleaned_query.find('\n'):].strip()
+            
+            upper_query = cleaned_query.upper()
+            is_select = upper_query.startswith('SELECT') or upper_query.startswith('WITH')
+            
+            if is_select:
+                if fetch_all:
+                    results = self.cursor.fetchall()
+                    result_dicts = [dict(row) for row in results]
+                    return result_dicts
+                else:
+                    result = self.cursor.fetchone()
+                    if result:
+                        result_dict = dict(result)
+                        return result_dict
+                    return None
             else:
-                # 返回影响的行数
-                return self.cursor.rowcount
+                # 对于非SELECT语句，返回影响的行数
+                row_count = self.cursor.rowcount
+                return row_count
                 
         except Exception as e:
+            import traceback
+            print(f"执行查询失败: {str(e)}")
+            print(f"SQL: {query}")
+            print(f"参数: {params}")
+            print(f"错误堆栈: {traceback.format_exc()}")
             logger.error(f"执行查询失败: {str(e)}")
             logger.error(f"SQL: {query}")
             logger.error(f"参数: {params}")
+            logger.error(f"错误堆栈: {traceback.format_exc()}")
             if self.connection:
                 self.connection.rollback()
             return None
@@ -553,8 +576,18 @@ def get_db_access(db_path=None):
     """
     global _db_access_instance
     
-    if _db_access_instance is None and db_path:
-        _db_access_instance = DBAccess(db_path)
+    # 如果还没有实例，尝试创建一个
+    if _db_access_instance is None:
+        # 如果提供了db_path，使用它创建实例
+        if db_path:
+            _db_access_instance = DBAccess(db_path)
+        else:
+            # 尝试使用默认路径
+            import os
+            default_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 
+                                       'data', 'finance_system.db')
+            if os.path.exists(default_path):
+                _db_access_instance = DBAccess(default_path)
     
     return _db_access_instance
 
@@ -577,7 +610,7 @@ def execute_query(query, params=None, fetch=False, fetch_all=False):
     Args:
         query: SQL查询语句
         params: 查询参数
-        fetch: 是否返回单条记录
+        fetch: 是否返回单条记录（兼容旧代码）
         fetch_all: 是否返回所有记录
         
     Returns:
@@ -585,7 +618,10 @@ def execute_query(query, params=None, fetch=False, fetch_all=False):
     """
     db_access = get_db_access()
     if db_access:
-        return db_access.execute_query(query, params, fetch, fetch_all)
+        # 兼容旧代码：如果fetch=True，自动设置fetch_all=False
+        if fetch:
+            fetch_all = False
+        return db_access.execute_query(query, params, fetch_all=fetch_all)
     return None
 
 
