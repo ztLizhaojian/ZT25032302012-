@@ -1,0 +1,2 @@
+save_transaction 方法被调用，直接调用 report_widget.update_reports
+report_widget.update_reports 调用成功
